@@ -1,0 +1,8 @@
+﻿name = "buildquant-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "buildquant"
+database_id = "c857405f-7ee8-412a-bf1e-6ccef96c710e"

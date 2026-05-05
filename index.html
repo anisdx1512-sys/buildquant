@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BuildQuant v4 — SaaS Cloud</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+
+<!-- ═══ LIBRAIRIES ESSENTIELLES ═══ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- ═══ FEUILLE DE STYLE ═══ -->
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════
+     SIDEBAR
+═══════════════════════════ -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <div class="logo-icon">BQ</div>
+      <div>
+        <div class="logo-text">BuildQuant</div>
+        <div class="logo-badge">v4 · SaaS Cloud</div>
+      </div>
+    </div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Navigation</div>
+    <div class="nav-item active" onclick="nav('dashboard',this)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span>Tableau de bord</span>
+    </div>
+    <div class="nav-item" onclick="nav('projects',this)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span>Mes Projets</span>
+      <span class="nav-badge" id="nb-projects">0</span>
+    </div>
+    <div class="nav-item" onclick="nav('new-project',this)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      <span>Nouveau DQE</span>
+    </div>
+    <div class="nav-label">Base BCR</div>
+    <div class="nav-item" onclick="nav('bcr',this)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Recherche BCR</span>
+      <span class="nav-badge" id="nb-bcr">230</span>
+    </div>
+    <div class="nav-item" onclick="nav('bcr-browse',this)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      <span>Catalogue BCR</span>
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <div class="avatar" id="sb-avatar">?</div>
+      <div class="user-info"><span id="sb-name">...</span><small id="sb-email">Chargement...</small></div>
+    </div>
+    <button onclick="doLogout()" style="margin-top:10px;width:100%;padding:7px;background:rgba(224,85,85,.1);color:var(--red);border:1px solid rgba(224,85,85,.2);border-radius:8px;font-size:11.5px;cursor:pointer;font-family:DM Sans,sans-serif;">Déconnexion</button>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════
+     MAIN
+═══════════════════════════ -->
+<main class="main">
+  <header class="topbar">
+    <div class="topbar-title">
+      <h1 id="page-title">Tableau de bord</h1>
+      <p id="page-sub">Vue d'ensemble de vos projets</p>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" onclick="nav('bcr',null)">🔍 Recherche BCR</button>
+      <button class="btn btn-primary btn-sm" onclick="nav('new-project',null)">+ Nouveau DQE</button>
+    </div>
+  </header>
+
+  <!-- ═══ PAGE : DASHBOARD ═══ -->
+  <div class="content page active" id="page-dashboard">
+    <div class="stats-grid">
+      <div class="stat-card yellow">
+        <div class="stat-icon si-yellow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+        <div class="stat-value" id="s-total">0</div>
+        <div class="stat-label">Projets DQE</div>
+        <div class="stat-badge sb-neu">Total</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-icon si-green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <div class="stat-value" id="s-encours">0</div>
+        <div class="stat-label">En cours</div>
+        <div class="stat-badge sb-up">Actifs</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-icon si-blue"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div class="stat-value" id="s-montant">0</div>
+        <div class="stat-label">Total HT (DA)</div>
+        <div class="stat-badge sb-neu">Cumulé</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="stat-icon si-purple"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+        <div class="stat-value">230</div>
+        <div class="stat-label">Articles BCR</div>
+        <div class="stat-badge sb-up">5 corps d'état</div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header">
+          <div><h3>Derniers projets modifiés</h3><p>Accès rapide</p></div>
+          <button class="btn btn-ghost btn-sm" onclick="nav('projects',null)">Voir tout</button>
+        </div>
+        <div id="dash-projects">
+          <div class="empty"><div class="empty-icon">📋</div><h3>Aucun projet</h3><p>Créez votre premier DQE</p></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><h3>Activité récente</h3></div></div>
+        <div id="activity-list">
+          <div class="act-item">
+            <div class="act-dot y"></div>
+            <div>
+              <div class="act-title">BuildQuant v4 · SaaS Cloud</div>
+              <div class="act-sub">☁ Supabase Auth · Cloud Save · BCR 2024</div>
+            </div>
+            <div class="act-time">Maintenant</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE : MES PROJETS ═══ -->
+  <div class="content page" id="page-projects">
+    <div class="sec-title">Mes Projets DQE</div>
+    <div class="sec-sub">Tous vos projets structurés par chapitres</div>
+    <div id="projects-container">
+      <div class="empty"><div class="empty-icon">📂</div><h3>Aucun projet</h3><p>Commencez par créer un nouveau DQE</p></div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE : NOUVEAU PROJET / DQE ═══ -->
+  <div class="content page" id="page-new-project">
+    <div class="sec-title">Nouveau Projet DQE</div>
+    <div class="sec-sub">Recherchez dans la BCR à droite pour insérer des articles instantanément dans votre chapitre actif</div>
+
+    <div class="dqe-layout">
+
+      <!-- LEFT : Formulaire + DQE -->
+      <div class="dqe-left">
+
+        <!-- Informations projet -->
+        <div class="card" style="padding:20px;margin-bottom:16px;">
+          <h3 style="font-family:'Syne',sans-serif;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;">Informations du Projet</h3>
+          <div class="form-grid">
+            <div class="fg"><label>Intitulé *</label><input id="p-nom" placeholder="Ex: Route RN12 — Lot 03"/></div>
+            <div class="fg"><label>Maître d'ouvrage</label><input id="p-mo" placeholder="Ex: DLEP Tizi Ouzou"/></div>
+            <div class="fg"><label>Wilaya</label>
+              <select id="p-wilaya">
+                <option value="">--</option>
+                <option>Tizi Ouzou</option><option>Alger</option><option>Oran</option>
+                <option>Constantine</option><option>Béjaïa</option><option>Sétif</option>
+                <option>Annaba</option><option>Blida</option><option>Boumerdès</option>
+                <option>Médéa</option><option>Batna</option><option>Autre</option>
+              </select>
+            </div>
+            <div class="fg"><label>Réf. dossier</label><input id="p-ref" placeholder="DUC/2024/047"/></div>
+            <div class="fg"><label>Date</label><input type="date" id="p-date"/></div>
+            <div class="fg"><label>TVA</label>
+              <select id="p-tva" onchange="recalcAll()">
+                <option value="0">0% — Exonéré</option>
+                <option value="9">9% — Logements</option>
+                <option value="19" selected>19% — Travaux publics</option>
+              </select>
+            </div>
+            <div class="fg"><label>Bureau d'études</label><input id="p-be" placeholder="Ex: SARL TechBuild"/></div>
+            <div class="fg"><label>Statut</label>
+              <select id="p-statut">
+                <option value="brouillon">Brouillon</option>
+                <option value="en-cours">En cours</option>
+                <option value="terminé">Terminé</option>
+              </select>
+            </div>
+            <div class="fg full"><label>Objet des travaux</label><textarea id="p-objet" placeholder="Description..."></textarea></div>
+          </div>
+        </div>
+
+        <!-- DQE — Chapitres -->
+        <div class="card" style="padding:20px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div>
+              <h3 style="font-family:'Syne',sans-serif;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">DQE — Décomposition par Chapitres</h3>
+              <p style="font-size:11px;color:var(--text3);margin-top:3px;">Cliquez sur un chapitre pour le sélectionner, puis insérez depuis la BCR →</p>
+            </div>
+          </div>
+          <div class="dqe-toolbar">
+            <!-- Import Excel / BCR -->
+            <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(event)"/>
+            <button class="btn btn-sm" style="background:rgba(156,110,248,.15);color:#a78bfa;border:1px solid rgba(156,110,248,.3);" onclick="document.getElementById('excel-import-input').click()">
+              ⚡ Import Excel / BCR
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="addChap()">+ Chapitre</button>
+            <button class="btn btn-ghost btn-sm" onclick="collapseAll()">↑ Replier</button>
+            <button class="btn btn-ghost btn-sm" onclick="expandAll()">↓ Déplier</button>
+          </div>
+          <div id="chaps-container"></div>
+          <!-- Totaux récap -->
+          <div class="totals-box">
+            <div id="chaps-recap" style="border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:8px;"></div>
+            <div class="tot-row"><span>Total HT</span><span id="t-ht">0 DA</span></div>
+            <div class="tot-row"><span id="t-tva-lbl">TVA (19%)</span><span id="t-tva">0 DA</span></div>
+            <div class="tot-row tot-main"><span>TOTAL TTC</span><span id="t-ttc">0 DA</span></div>
+          </div>
+        </div>
+
+        <!-- Signatures -->
+        <div class="card" style="padding:20px;margin-bottom:20px;">
+          <h3 style="font-family:'Syne',sans-serif;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;">Signatures & Visas</h3>
+          <div class="sig-grid">
+            <div class="sig-box"><label>Établi par</label><input id="s1n" placeholder="Nom"/><input id="s1t" placeholder="Fonction" style="margin-top:7px;"/><div class="sig-area">Signature / Cachet</div></div>
+            <div class="sig-box"><label>Vérifié par</label><input id="s2n" placeholder="Nom"/><input id="s2t" placeholder="Fonction" style="margin-top:7px;"/><div class="sig-area">Signature / Cachet</div></div>
+            <div class="sig-box"><label>Approuvé par</label><input id="s3n" placeholder="Nom"/><input id="s3t" placeholder="Fonction" style="margin-top:7px;"/><div class="sig-area">Signature / Cachet</div></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-bottom:40px;">
+          <button class="btn btn-ghost" onclick="nav('dashboard',null)">Annuler</button>
+          <button class="btn btn-ghost" onclick="saveProject()">💾 Enregistrer</button>
+          <button class="btn btn-success btn-sm" onclick="generateXLSX()" style="background:rgba(76,175,125,.15);color:#4caf7d;border:1px solid rgba(76,175,125,.3);">📊 Export Excel</button>
+          <button class="btn btn-primary" onclick="generatePDF()">📄 PDF BTPH</button>
+        </div>
+      </div>
+
+      <!-- RIGHT : BCR Panel -->
+      <div class="bcr-panel">
+        <div class="bcr-panel-title">Recherche BCR <span class="badge-bcr">230 articles</span></div>
+        <div class="bcr-panel-sub" id="bcr-target-info">Sélectionnez un chapitre pour insérer des articles</div>
+
+        <!-- Zone selector -->
+        <div class="zone-selector">
+          <div class="zone-btn active-nord" id="zb-nord" onclick="setZone('nord')">Nord</div>
+          <div class="zone-btn" id="zb-hauts" onclick="setZone('hauts')">Hauts-P.</div>
+          <div class="zone-btn" id="zb-sud" onclick="setZone('sud')">Sud</div>
+        </div>
+
+        <!-- Search -->
+        <div class="bcr-search-wrap">
+          <div class="bcr-search-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+          <input class="bcr-search-input" id="bcr-panel-search" placeholder="Rechercher un article BCR..." oninput="renderBCRPanel()"/>
+          <span class="bcr-search-count" id="bcr-panel-count"></span>
+        </div>
+
+        <!-- Filters -->
+        <div class="bcr-filters" id="bcr-panel-filters"></div>
+
+        <!-- Results -->
+        <div class="bcr-results" id="bcr-panel-results"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE : RECHERCHE BCR ═══ -->
+  <div class="content page" id="page-bcr">
+    <div class="sec-title">Recherche BCR</div>
+    <div class="sec-sub">Base de Coûts de Référence — 230 articles · 5 corps d'état · 3 zones tarifaires</div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap;">
+      <div class="zone-selector" style="flex:none;">
+        <div class="zone-btn active-nord" id="pzb-nord" onclick="setZonePage('nord')">🌊 Nord</div>
+        <div class="zone-btn" id="pzb-hauts" onclick="setZonePage('hauts')">🏔 Hauts-P.</div>
+        <div class="zone-btn" id="pzb-sud" onclick="setZonePage('sud')">☀ Sud</div>
+      </div>
+      <div class="bcr-search-wrap" style="flex:1;margin-bottom:0;">
+        <div class="bcr-search-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+        <input class="bcr-search-input" id="bcr-page-search" placeholder="Rechercher par désignation, code, unité..." oninput="renderBCRPage()"/>
+        <span class="bcr-search-count" id="bcr-page-count"></span>
+      </div>
+    </div>
+    <div class="bcr-filters" id="bcr-page-filters"></div>
+    <div id="bcr-page-results" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px;"></div>
+  </div>
+
+  <!-- ═══ PAGE : CATALOGUE BCR ═══ -->
+  <div class="content page" id="page-bcr-browse">
+    <div class="sec-title">Catalogue BCR</div>
+    <div class="sec-sub">Tous les articles classés par corps d'état et chapitres</div>
+    <div class="tabs" id="bcr-browse-tabs"></div>
+    <div id="bcr-browse-content"></div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════
+     NOTIFICATIONS
+═══════════════════════════ -->
+<div class="notif" id="notif">
+  <span style="color:var(--green);font-size:15px;">✓</span>
+  <span id="notif-msg"></span>
+</div>
+
+<!-- Zone cachée pour génération PDF -->
+<div id="pdf-src"></div>
+
+<!-- ═══════════════════════════
+     AUTH OVERLAY
+═══════════════════════════ -->
+<div class="auth-overlay" id="auth-overlay" style="display:none;">
+  <div class="auth-box">
+    <div class="auth-box-logo">
+      <div class="auth-box-icon">BQ</div>
+      <div>
+        <div class="auth-box-title">BuildQuant</div>
+        <div style="font-size:10px;color:var(--text3);">v4 · SaaS Cloud · BCR 2024</div>
+      </div>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab" data-tab="login" onclick="switchAuthTab('login')" style="background:var(--accent);color:#0d0f14;">Connexion</button>
+      <button class="auth-tab" data-tab="register" onclick="switchAuthTab('register')" style="background:var(--surface2);color:var(--text2);">Créer un compte</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="auth-login-panel">
+      <div class="auth-plan-info">✦ Plan Freemium — 3 projets gratuits · Export PDF + Excel inclus</div>
+      <input class="auth-input" type="email" id="auth-email" placeholder="Email"/>
+      <input class="auth-input" type="password" id="auth-pw" placeholder="Mot de passe"/>
+      <div class="auth-error" id="auth-error"></div>
+      <button class="auth-btn-primary" id="auth-login-btn" onclick="doLogin()">Se connecter</button>
+      <div class="auth-sep">ou</div>
+      <button class="auth-skip" onclick="loginLocal()">Continuer sans compte (mode local)</button>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="auth-reg-panel" style="display:none;">
+      <div class="auth-plan-info">🎁 Inscription gratuite — aucune carte bancaire requise</div>
+      <input class="auth-input" type="text" id="auth-prenom" placeholder="Prénom"/>
+      <input class="auth-input" type="email" id="auth-email-r" placeholder="Email"/>
+      <input class="auth-input" type="password" id="auth-pw-r" placeholder="Mot de passe (min. 8 caractères)"/>
+      <div class="auth-error" id="auth-error-r"></div>
+      <button class="auth-btn-primary" id="auth-reg-btn" onclick="doRegister()">Créer mon compte gratuit</button>
+      <div class="auth-sep">ou</div>
+      <button class="auth-skip" onclick="loginLocal()">Continuer sans compte (mode local)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════
+     BOTTOM NAV (mobile only)
+═══════════════════════════ -->
+<nav class="bottom-nav" id="bottom-nav">
+  <button class="bn-item active" id="bn-dash" onclick="nav('dashboard',null);setBN('bn-dash')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    Accueil
+  </button>
+  <button class="bn-item" id="bn-projects" onclick="nav('projects',null);setBN('bn-projects')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    Projets
+  </button>
+  <button class="bn-item" id="bn-new" onclick="nav('new-project',null);setBN('bn-new')" style="color:var(--accent);">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+    Nouveau
+  </button>
+  <button class="bn-item" id="bn-bcr" onclick="nav('bcr',null);setBN('bn-bcr')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    BCR
+  </button>
+  <button class="bn-item" id="bn-catalogue" onclick="nav('bcr-browse',null);setBN('bn-catalogue')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+    Catalogue
+  </button>
+</nav>
+
+<!-- ═══ SCRIPT PRINCIPAL ═══ -->
+<script src="script.js"></script>
+
+</body>
+</html>
+
