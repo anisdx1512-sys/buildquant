@@ -16,3 +16,12 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
+
+CREATE TABLE IF NOT EXISTS reset_tokens (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  code       TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used       INTEGER DEFAULT 0,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);

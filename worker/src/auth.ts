@@ -113,3 +113,47 @@ authRoutes.get('/user', async (c) => {
 
 /* ── LOGOUT ── */
 authRoutes.post('/logout', (c) => c.json({ message: 'Déconnecté' }))
+
+/* ── FORGOT PASSWORD ── */
+authRoutes.post('/forgot-password', async (c) => {
+  const { email } = await c.req.json()
+  if (!email) return c.json({ error: 'Email requis' }, 400)
+
+  const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email).first<{ id: string }>()
+  if (!user) return c.json({ error: 'Aucun compte trouvé pour cet email' }, 404)
+
+  const code = String(Math.floor(100000 + Math.random() * 900000))
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+
+  await c.env.DB.prepare('DELETE FROM reset_tokens WHERE user_id = ?').bind(user.id).run()
+  await c.env.DB.prepare(
+    'INSERT INTO reset_tokens (id, user_id, code, expires_at, used) VALUES (?, ?, ?, ?, 0)'
+  ).bind(crypto.randomUUID(), user.id, code, expiresAt).run()
+
+  return c.json({ reset_code: code, message: 'Code généré — valide 15 minutes' })
+})
+
+/* ── RESET PASSWORD ── */
+authRoutes.post('/reset-password', async (c) => {
+  const { email, code, new_password } = await c.req.json()
+  if (!email || !code || !new_password) return c.json({ error: 'Champs manquants' }, 400)
+  if (new_password.length < 8) return c.json({ error: 'Mot de passe min. 8 caractères' }, 400)
+
+  const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email).first<{ id: string }>()
+  if (!user) return c.json({ error: 'Email introuvable' }, 404)
+
+  const token = await c.env.DB.prepare(
+    'SELECT id, expires_at FROM reset_tokens WHERE user_id = ? AND code = ? AND used = 0'
+  ).bind(user.id, String(code)).first<{ id: string; expires_at: string }>()
+
+  if (!token) return c.json({ error: 'Code invalide ou déjà utilisé' }, 400)
+  if (new Date(token.expires_at) < new Date()) return c.json({ error: 'Code expiré — demandez-en un nouveau' }, 400)
+
+  const hashed = await hashPassword(new_password)
+  await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(hashed, user.id).run()
+  await c.env.DB.prepare('UPDATE reset_tokens SET used = 1 WHERE id = ?').bind(token.id).run()
+
+  return c.json({ message: 'Mot de passe réinitialisé avec succès' })
+})

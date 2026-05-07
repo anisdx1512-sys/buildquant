@@ -316,12 +316,128 @@ function initSupabase()      { return true; }
 function waitForSupabase(cb) { cb(); }
 
 function switchAuthTab(tab) {
-  document.getElementById('auth-login-panel').style.display = tab === 'login'    ? 'block' : 'none';
-  document.getElementById('auth-reg-panel').style.display   = tab === 'register' ? 'block' : 'none';
+  ['login','register','forgot','reset'].forEach(function(t) {
+    var el = document.getElementById('auth-' + (t === 'register' ? 'reg' : t) + '-panel');
+    if (el) el.style.display = t === tab ? 'block' : 'none';
+  });
+  var tabsBar = document.getElementById('auth-tabs-bar');
+  if (tabsBar) tabsBar.style.display = (tab === 'forgot' || tab === 'reset') ? 'none' : 'flex';
   document.querySelectorAll('.auth-tab').forEach(function(b) {
     b.style.background = b.dataset.tab === tab ? 'var(--accent)' : 'var(--surface2)';
     b.style.color      = b.dataset.tab === tab ? '#0d0f14'       : 'var(--text2)';
   });
+}
+
+/* ════════════════════════════════════════════
+   MOT DE PASSE OUBLIÉ — cloud + local
+════════════════════════════════════════════ */
+var resetContext = { email: '', type: '' };
+
+async function doForgotPassword() {
+  var email = document.getElementById('forgot-email').value.trim();
+  var errEl = document.getElementById('forgot-error');
+  errEl.style.display = 'none';
+  if (!email) { errEl.textContent = 'Entrez votre adresse email.'; errEl.style.display = 'block'; return; }
+
+  var btn = document.getElementById('forgot-btn');
+  btn.textContent = 'Génération...';
+  btn.disabled = true;
+
+  /* Essayer d'abord le compte local */
+  var accounts = JSON.parse(localStorage.getItem('bq_accounts') || '{}');
+  if (accounts[email]) {
+    var code = String(Math.floor(100000 + Math.random() * 900000));
+    var exp  = Date.now() + 15 * 60 * 1000;
+    localStorage.setItem('bq_pending_reset', JSON.stringify({ email: email, code: code, exp: exp, type: 'local' }));
+    resetContext = { email: email, type: 'local' };
+    _showResetPanel(email, code);
+    btn.textContent = 'Recevoir le code';
+    btn.disabled = false;
+    return;
+  }
+
+  /* Sinon essayer le cloud */
+  try {
+    var r = await fetch(API + '/auth/forgot-password', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ email: email })
+    });
+    var data = await r.json();
+    btn.textContent = 'Recevoir le code';
+    btn.disabled = false;
+    if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    resetContext = { email: email, type: 'cloud' };
+    _showResetPanel(email, data.reset_code);
+  } catch(e) {
+    btn.textContent = 'Recevoir le code';
+    btn.disabled = false;
+    errEl.textContent = 'Erreur réseau — vérifiez votre connexion.';
+    errEl.style.display = 'block';
+  }
+}
+
+function _showResetPanel(email, code) {
+  switchAuthTab('reset');
+  document.getElementById('reset-code-value').textContent = code;
+  document.getElementById('reset-code-display').style.display = 'block';
+  document.getElementById('reset-code').value = code;
+  document.getElementById('reset-pw').value = '';
+  document.getElementById('reset-pw2').value = '';
+  document.getElementById('reset-error').style.display = 'none';
+}
+
+async function doResetPassword() {
+  var code  = document.getElementById('reset-code').value.trim();
+  var pw    = document.getElementById('reset-pw').value;
+  var pw2   = document.getElementById('reset-pw2').value;
+  var errEl = document.getElementById('reset-error');
+  errEl.style.display = 'none';
+
+  if (!code || !pw || !pw2)  { errEl.textContent = 'Remplissez tous les champs.'; errEl.style.display = 'block'; return; }
+  if (pw !== pw2)            { errEl.textContent = 'Les mots de passe ne correspondent pas.'; errEl.style.display = 'block'; return; }
+  if (pw.length < 8)         { errEl.textContent = 'Mot de passe min. 8 caractères.'; errEl.style.display = 'block'; return; }
+
+  var btn = document.getElementById('reset-btn');
+  btn.textContent = 'Réinitialisation...';
+  btn.disabled = true;
+
+  /* Mode local */
+  if (resetContext.type === 'local') {
+    var pending = JSON.parse(localStorage.getItem('bq_pending_reset') || 'null');
+    btn.textContent = 'Réinitialiser le mot de passe';
+    btn.disabled = false;
+    if (!pending || pending.email !== resetContext.email) { errEl.textContent = 'Session expirée — recommencez.'; errEl.style.display = 'block'; return; }
+    if (pending.code !== code) { errEl.textContent = 'Code incorrect.'; errEl.style.display = 'block'; return; }
+    if (Date.now() > pending.exp) { errEl.textContent = 'Code expiré — demandez-en un nouveau.'; errEl.style.display = 'block'; return; }
+    var accounts = JSON.parse(localStorage.getItem('bq_accounts') || '{}');
+    accounts[resetContext.email].hash = await sha256hex(pw);
+    localStorage.setItem('bq_accounts', JSON.stringify(accounts));
+    localStorage.removeItem('bq_pending_reset');
+    notify('✓ Mot de passe local réinitialisé !');
+    switchAuthTab('login');
+    return;
+  }
+
+  /* Mode cloud */
+  try {
+    var r = await fetch(API + '/auth/reset-password', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ email: resetContext.email, code: code, new_password: pw })
+    });
+    var data = await r.json();
+    btn.textContent = 'Réinitialiser le mot de passe';
+    btn.disabled = false;
+    if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    notify('✓ Mot de passe réinitialisé — connectez-vous');
+    switchAuthTab('login');
+  } catch(e) {
+    btn.textContent = 'Réinitialiser le mot de passe';
+    btn.disabled = false;
+    errEl.textContent = 'Erreur réseau — vérifiez votre connexion.';
+    errEl.style.display = 'block';
+  }
 }
 
 /* ════════════════════════════════════════════

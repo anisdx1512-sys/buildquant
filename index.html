@@ -315,7 +315,7 @@
         <div style="font-size:10px;color:var(--text3);">v4 · SaaS Cloud · BCR 2024</div>
       </div>
     </div>
-    <div class="auth-tabs">
+    <div class="auth-tabs" id="auth-tabs-bar">
       <button class="auth-tab" data-tab="login" onclick="switchAuthTab('login')" style="background:var(--accent);color:#0d0f14;">Connexion</button>
       <button class="auth-tab" data-tab="register" onclick="switchAuthTab('register')" style="background:var(--surface2);color:var(--text2);">Créer un compte</button>
     </div>
@@ -325,6 +325,9 @@
       <div class="auth-plan-info">✦ Plan Freemium — 3 projets gratuits · Export PDF + Excel inclus</div>
       <input class="auth-input" type="email" id="auth-email" placeholder="Email"/>
       <input class="auth-input" type="password" id="auth-pw" placeholder="Mot de passe"/>
+      <div style="text-align:right;margin:-4px 0 10px;">
+        <button onclick="switchAuthTab('forgot')" style="background:none;border:none;color:var(--text3);font-size:11.5px;cursor:pointer;text-decoration:underline;font-family:'DM Sans',sans-serif;">Mot de passe oublié ?</button>
+      </div>
       <div class="auth-error" id="auth-error"></div>
       <button class="auth-btn-primary" id="auth-login-btn" onclick="doLogin()">Se connecter</button>
       <div class="auth-sep">ou</div>
@@ -341,6 +344,34 @@
       <button class="auth-btn-primary" id="auth-reg-btn" onclick="doRegister()">Créer mon compte gratuit</button>
       <div class="auth-sep">ou</div>
       <button class="auth-skip" onclick="loginLocal()">Continuer sans compte (mode local)</button>
+    </div>
+
+    <!-- FORGOT PASSWORD -->
+    <div id="auth-forgot-panel" style="display:none;">
+      <div style="margin-bottom:18px;">
+        <button onclick="switchAuthTab('login')" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:5px;">← Retour à la connexion</button>
+      </div>
+      <div class="auth-plan-info" style="margin-bottom:16px;">🔑 Entrez votre email — un code de réinitialisation sera généré</div>
+      <input class="auth-input" type="email" id="forgot-email" placeholder="Votre adresse email"/>
+      <div class="auth-error" id="forgot-error"></div>
+      <button class="auth-btn-primary" id="forgot-btn" onclick="doForgotPassword()">Recevoir le code</button>
+    </div>
+
+    <!-- RESET PASSWORD -->
+    <div id="auth-reset-panel" style="display:none;">
+      <div style="margin-bottom:18px;">
+        <button onclick="switchAuthTab('forgot')" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:5px;">← Renvoyer un code</button>
+      </div>
+      <div id="reset-code-display" style="background:rgba(232,197,71,.1);border:1px solid rgba(232,197,71,.3);border-radius:9px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--text2);display:none;">
+        <div style="color:var(--accent);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Votre code de réinitialisation</div>
+        <div id="reset-code-value" style="font-size:26px;font-weight:700;letter-spacing:6px;color:var(--accent);font-family:'Syne',sans-serif;"></div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:4px;">Valide 15 minutes — copiez-le et saisissez-le ci-dessous</div>
+      </div>
+      <input class="auth-input" type="text" id="reset-code" placeholder="Code à 6 chiffres" maxlength="6" style="letter-spacing:4px;font-size:16px;text-align:center;"/>
+      <input class="auth-input" type="password" id="reset-pw" placeholder="Nouveau mot de passe (min. 8 caractères)"/>
+      <input class="auth-input" type="password" id="reset-pw2" placeholder="Confirmer le nouveau mot de passe"/>
+      <div class="auth-error" id="reset-error"></div>
+      <button class="auth-btn-primary" id="reset-btn" onclick="doResetPassword()">Réinitialiser le mot de passe</button>
     </div>
   </div>
 </div>
