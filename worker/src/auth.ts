@@ -134,6 +134,36 @@ authRoutes.post('/forgot-password', async (c) => {
   return c.json({ reset_code: code, message: 'Code généré — valide 15 minutes' })
 })
 
+/* ── CHANGE PASSWORD (utilisateur connecté) ── */
+authRoutes.post('/change-password', async (c) => {
+  const auth = c.req.header('Authorization')
+  if (!auth) return c.json({ error: 'Non autorisé' }, 401)
+
+  let payload: any
+  try {
+    payload = await verifyJWT(auth.replace('Bearer ', ''), c.env.JWT_SECRET)
+  } catch {
+    return c.json({ error: 'Token invalide' }, 401)
+  }
+
+  const { current_password, new_password } = await c.req.json()
+  if (!current_password || !new_password) return c.json({ error: 'Champs manquants' }, 400)
+  if (new_password.length < 8) return c.json({ error: 'Nouveau mot de passe min. 8 caractères' }, 400)
+  if (current_password === new_password) return c.json({ error: 'Le nouveau mot de passe doit être différent' }, 400)
+
+  const currentHash = await hashPassword(current_password)
+  const user = await c.env.DB.prepare(
+    'SELECT id FROM users WHERE id = ? AND password_hash = ?'
+  ).bind(payload.sub, currentHash).first<{ id: string }>()
+
+  if (!user) return c.json({ error: 'Mot de passe actuel incorrect' }, 401)
+
+  const newHash = await hashPassword(new_password)
+  await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(newHash, payload.sub).run()
+
+  return c.json({ message: 'Mot de passe mis à jour avec succès' })
+})
+
 /* ── RESET PASSWORD ── */
 authRoutes.post('/reset-password', async (c) => {
   const { email, code, new_password } = await c.req.json()

@@ -441,6 +441,79 @@ async function doResetPassword() {
 }
 
 /* ════════════════════════════════════════════
+   CHANGER LE MOT DE PASSE (utilisateur connecté)
+════════════════════════════════════════════ */
+function showChangePw() {
+  var modal = document.getElementById('changepw-modal');
+  modal.style.display = 'flex';
+  document.getElementById('changepw-current').value = '';
+  document.getElementById('changepw-new').value     = '';
+  document.getElementById('changepw-confirm').value  = '';
+  document.getElementById('changepw-error').style.display = 'none';
+  var sub = document.getElementById('changepw-subtitle');
+  sub.textContent = isCloudMode()
+    ? 'Compte cloud — ' + (currentUser.email || '')
+    : 'Compte local — ' + (currentUser.email || '');
+}
+
+function hideChangePw() {
+  document.getElementById('changepw-modal').style.display = 'none';
+}
+
+async function doChangePw() {
+  var current = document.getElementById('changepw-current').value;
+  var pw      = document.getElementById('changepw-new').value;
+  var pw2     = document.getElementById('changepw-confirm').value;
+  var errEl   = document.getElementById('changepw-error');
+  errEl.style.display = 'none';
+
+  if (!current || !pw || !pw2)  { errEl.textContent = 'Remplissez tous les champs.'; errEl.style.display = 'block'; return; }
+  if (pw !== pw2)               { errEl.textContent = 'Les nouveaux mots de passe ne correspondent pas.'; errEl.style.display = 'block'; return; }
+  if (pw.length < 8)            { errEl.textContent = 'Nouveau mot de passe : min. 8 caractères.'; errEl.style.display = 'block'; return; }
+  if (current === pw)           { errEl.textContent = 'Le nouveau mot de passe doit être différent de l\'ancien.'; errEl.style.display = 'block'; return; }
+
+  var btn = document.getElementById('changepw-btn');
+  btn.textContent = 'Enregistrement...';
+  btn.disabled = true;
+
+  /* ── Compte local ── */
+  if (!isCloudMode()) {
+    var accounts = JSON.parse(localStorage.getItem('bq_accounts') || '{}');
+    var acc = accounts[currentUser.email];
+    if (!acc) { errEl.textContent = 'Compte introuvable.'; errEl.style.display = 'block'; btn.textContent = 'Enregistrer'; btn.disabled = false; return; }
+    var currentHash = await sha256hex(current);
+    if (acc.hash !== currentHash) { errEl.textContent = 'Mot de passe actuel incorrect.'; errEl.style.display = 'block'; btn.textContent = 'Enregistrer'; btn.disabled = false; return; }
+    acc.hash = await sha256hex(pw);
+    localStorage.setItem('bq_accounts', JSON.stringify(accounts));
+    btn.textContent = 'Enregistrer';
+    btn.disabled = false;
+    hideChangePw();
+    notify('✓ Mot de passe local mis à jour !');
+    return;
+  }
+
+  /* ── Compte cloud ── */
+  try {
+    var r = await fetch(API + '/auth/change-password', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ current_password: current, new_password: pw })
+    });
+    var data = await r.json();
+    btn.textContent = 'Enregistrer';
+    btn.disabled = false;
+    if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    hideChangePw();
+    notify('✓ Mot de passe cloud mis à jour !');
+  } catch(e) {
+    btn.textContent = 'Enregistrer';
+    btn.disabled = false;
+    errEl.textContent = 'Erreur réseau — vérifiez votre connexion.';
+    errEl.style.display = 'block';
+  }
+}
+
+/* ════════════════════════════════════════════
    BCR DATABASE — 230 articles, 5 corps d'état
    Source: BCR MHUV Algérie 2024
    Zones: nord / hauts / sud
