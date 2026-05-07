@@ -1565,57 +1565,41 @@ function genPDF(idx) {
     '</tr></table>' +
     C.pgF(pageNum) + '</div>';
 
-  /* ── Injection dans le DOM ──
-     CRITICAL: position:absolute (PAS fixed) + left:-9999px, top:0
-     html2canvas ne peut pas capturer les éléments en position:fixed hors viewport.
-     position:absolute garantit que le contenu est accessible dans le flux du document.
+  /* ── Rendu PDF ──
+     On passe une CHAÎNE HTML à html2pdf().from(string).
+     En mode string, html2pdf crée lui-même un div temporaire qu'il appende
+     au body à top:0;left:0 (visible, dans le viewport) → html2canvas capture
+     correctement. Il supprime ce div automatiquement après export.
+     NE PAS passer un élément DOM positionné hors viewport (left:-9999px) :
+     html2canvas ne peut pas le capturer et le PDF sort vide.
   ── */
-  var src = document.getElementById('pdf-src');
-  src.innerHTML = cover + toc + chapPages + recap;
-  src.style.cssText = [
-    'display:block',
-    'position:absolute',
-    'left:-9999px',
-    'top:0',
-    'width:794px',
-    'background:#fff',
-    'overflow:visible',
-    'font-family:Arial,sans-serif',
-    'z-index:-1'
-  ].join(';') + ';';
+  var htmlContent =
+    '<div style="width:794px;background:#fff;font-family:Arial,sans-serif;overflow:visible;">' +
+      cover + toc + chapPages + recap +
+    '</div>';
 
-  /* ── Options html2pdf ──
-     margin:[5,5,5,5] → marges A4 propres, le contenu ne touche pas les bords.
-     windowWidth:794 → correspond exactement à la largeur A4 à 96dpi.
-     mode:'css' → respecte page-break-after:always et break-after:page sur chaque div.
-     scale:2 → rendu HD (Retina) sans distorsion.
-  ── */
   var opt = {
     margin:      [5, 5, 5, 5],
     filename:    'BQ_DQE_' + (p.nom || 'DQE').replace(/\s+/g,'_').substring(0,40) + '.pdf',
     image:       { type: 'jpeg', quality: 0.98 },
     html2canvas: {
-      scale:          2,
-      useCORS:        true,
-      backgroundColor:'#ffffff',
-      windowWidth:    794,
-      scrollX:        0,
-      scrollY:        0,
-      logging:        false,
-      allowTaint:     false
+      scale:           2,
+      useCORS:         true,
+      backgroundColor: '#ffffff',
+      windowWidth:     794,
+      scrollX:         0,
+      scrollY:         0,
+      logging:         false,
+      allowTaint:      false
     },
     jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
     pagebreak:   { mode: ['css', 'legacy'] }
   };
 
-  html2pdf().set(opt).from(src).save().then(function() {
-    src.style.cssText = 'display:none;';
-    src.innerHTML     = '';
+  html2pdf().set(opt).from(htmlContent).save().then(function() {
     notify('✓ PDF BTPH exporté !');
     addAct('PDF exporté', '"' + (p.nom || 'Projet') + '"', 'y');
   }).catch(function(e) {
-    src.style.cssText = 'display:none;';
-    src.innerHTML     = '';
     console.error('PDF error:', e);
     notify('Erreur lors de la génération PDF');
   });
