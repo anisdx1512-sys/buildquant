@@ -1347,16 +1347,22 @@ function editProject(idx) {
    PDF BTPH
 ════════════════════════════════════════════ */
 function generatePDF() { saveProject(); setTimeout(function() { genPDF(0); }, 400); }
+
 function genPDF(idx) {
   var p = projects[idx];
-  if (!p) { notify('Erreur'); return; }
-  notify('Génération PDF BTPH...');
+  if (!p) { notify('Erreur: projet introuvable'); return; }
+  notify('📄 Génération PDF BTPH...');
   var now   = new Date().toLocaleDateString('fr-DZ');
   var chaps = p.chapitres || [];
 
+  /* ── Styles réutilisés ──
+     PAGE utilise min-height pour garantir qu'une page courte remplit quand même l'A4.
+     BREAK utilise les deux syntaxes CSS (ancienne + moderne) pour compatibilité maximale.
+  ── */
   var C = {
-    PAGE : 'width:690px;margin:0 auto;font-family:Arial,sans-serif;font-size:9pt;color:#111;background:#fff;padding:20px;box-sizing:border-box;',
-    BREAK: 'page-break-after:always;',
+    PAGE : 'width:690px;margin:0 auto;font-family:Arial,sans-serif;font-size:9pt;color:#111;' +
+           'background:#fff;padding:20px 20px 14px;box-sizing:border-box;min-height:1050px;',
+    BREAK: 'page-break-after:always;break-after:page;',
     hdr: function() {
       return '<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #c8a800;margin-bottom:14px;padding-bottom:8px;"><tr>' +
         '<td style="vertical-align:middle;"><table cellpadding="0" cellspacing="4"><tr>' +
@@ -1372,7 +1378,7 @@ function genPDF(idx) {
       '</tr></table>';
     },
     pgF: function(n) {
-      return '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border-top:1px solid #e0e0e0;padding-top:8px;"><tr>' +
+      return '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:auto;padding-top:12px;border-top:1px solid #e0e0e0;"><tr>' +
         '<td style="font-size:7pt;color:#aaa;">BuildQuant · DQE BTPH · ' + (p.nom || 'Projet') + '</td>' +
         '<td style="text-align:right;font-size:7pt;color:#aaa;">Page ' + n + '</td>' +
       '</tr></table>';
@@ -1393,6 +1399,7 @@ function genPDF(idx) {
     TDB: 'padding:5px 8px;border:1px solid #e0e0e0;font-size:8.5pt;font-weight:700;color:#c8a800;text-align:right;',
   };
 
+  /* ── Page de garde ── */
   var cover =
     '<div style="' + C.PAGE + C.BREAK + '">' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="border:3px solid #c8a800;border-radius:6px;padding:28px;"><tr><td>' +
@@ -1423,6 +1430,7 @@ function genPDF(idx) {
       '</tr></table>' +
     '</td></tr></table></div>';
 
+  /* ── Table des matières ── */
   var toc =
     '<div style="' + C.PAGE + C.BREAK + '">' + C.hdr() + C.sec('Table des Matières — Sommaire DQE') +
     '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:16px;">' +
@@ -1463,36 +1471,68 @@ function genPDF(idx) {
     '</tr></table>' +
     C.pgF(2) + '</div>';
 
-  var chapPages = chaps.map(function(ch, ci) {
-    var rows = (ch.rows || []).map(function(r, ri) {
-      var bg = ri%2===0 ? '#fff' : '#fafafa';
-      return '<tr style="background:' + bg + '">' +
-        '<td style="' + C.TD + 'text-align:center;width:28px;">' + (ri+1) + '</td>' +
-        '<td style="' + C.TD + '">' + r.desig + '</td>' +
-        '<td style="' + C.TD + 'text-align:center;width:40px;">' + r.unite + '</td>' +
-        '<td style="' + C.TDR + 'width:55px;">' + r.qty + '</td>' +
-        '<td style="' + C.TDR + 'width:90px;">' + fmtN(r.pu) + ' DA</td>' +
-        '<td style="' + C.TDB + 'width:100px;">' + fmtN(r.montant) + ' DA</td>' +
-      '</tr>';
-    }).join('');
-    return '<div style="' + C.PAGE + C.BREAK + '">' + C.hdr() + C.sec('Chapitre ' + ch.num + ' — ' + ch.name) +
-      '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:10px;">' +
-        '<thead><tr>' +
-          '<th width="4%" style="' + C.TH + 'text-align:center;">N°</th>' +
-          '<th style="' + C.TH + 'text-align:left;">Désignation des Travaux</th>' +
-          '<th width="6%" style="' + C.TH + 'text-align:center;">Unité</th>' +
-          '<th width="8%" style="' + C.TH + 'text-align:center;">Qté</th>' +
-          '<th width="13%" style="' + C.TH + 'text-align:right;">P.U. (DA)</th>' +
-          '<th width="14%" style="' + C.TH + 'text-align:right;">Montant HT</th>' +
-        '</tr></thead>' +
-        '<tbody>' + (rows || '<tr><td colspan="6" style="' + C.TD + 'text-align:center;color:#aaa;">Aucun article</td></tr>') + '</tbody>' +
-        '<tfoot><tr style="background:#fffbea;">' +
-          '<td colspan="5" style="' + C.TD + 'font-weight:700;text-align:right;">Sous-total Chapitre ' + ch.num + '</td>' +
-          '<td style="' + C.TDB + '">' + fmtN(ch.subtotal || 0) + ' DA</td>' +
-        '</tr></tfoot>' +
-      '</table>' + C.pgF(3 + ci) + '</div>';
+  /* ── Pages des chapitres — avec découpe automatique toutes les ROWS lignes ──
+     Chaque chapitre long est découpé en sous-pages de ROWS lignes max.
+     Chaque sous-page est un div autonome avec son propre break-after.
+     Le numéro de ligne continue sur les pages suivantes d'un même chapitre.
+  ── */
+  var ROWS   = 30;
+  var pageNum = 3;
+  var chapPages = chaps.map(function(ch) {
+    var allRows   = ch.rows || [];
+    var numChunks = Math.max(1, Math.ceil(allRows.length / ROWS));
+    var pages     = '';
+
+    for (var pi = 0; pi < numChunks; pi++) {
+      var chunk    = allRows.slice(pi * ROWS, (pi + 1) * ROWS);
+      var isLast   = pi === numChunks - 1;
+      var offset   = pi * ROWS;
+      var suffix   = numChunks > 1
+        ? ' <span style="font-size:7pt;font-weight:400;color:#bbb;">(p.' + (pi+1) + '/' + numChunks + ')</span>'
+        : '';
+
+      var rowsHtml = chunk.map(function(r, ri) {
+        return '<tr style="background:' + (ri%2===0 ? '#fff' : '#fafafa') + '">' +
+          '<td style="' + C.TD + 'text-align:center;width:28px;">' + (offset+ri+1) + '</td>' +
+          '<td style="' + C.TD + '">' + (r.desig || '') + '</td>' +
+          '<td style="' + C.TD + 'text-align:center;width:40px;">' + (r.unite || '') + '</td>' +
+          '<td style="' + C.TDR + 'width:55px;">' + (r.qty || 0) + '</td>' +
+          '<td style="' + C.TDR + 'width:90px;">' + fmtN(r.pu) + ' DA</td>' +
+          '<td style="' + C.TDB + 'width:100px;">' + fmtN(r.montant) + ' DA</td>' +
+        '</tr>';
+      }).join('');
+
+      var tfoot = isLast
+        ? '<tfoot><tr style="background:#fffbea;">' +
+            '<td colspan="5" style="' + C.TD + 'font-weight:700;text-align:right;">Sous-total Chap. ' + ch.num + '</td>' +
+            '<td style="' + C.TDB + '">' + fmtN(ch.subtotal || 0) + ' DA</td>' +
+          '</tr></tfoot>'
+        : '<tfoot><tr><td colspan="6" style="' + C.TD + 'font-size:7.5pt;color:#aaa;text-align:center;font-style:italic;">Suite page suivante…</td></tr></tfoot>';
+
+      pages += '<div style="' + C.PAGE + C.BREAK + '">' +
+        C.hdr() +
+        C.sec('Chap. ' + ch.num + ' — ' + ch.name + suffix) +
+        '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:10px;">' +
+          '<thead><tr>' +
+            '<th width="4%" style="' + C.TH + 'text-align:center;">N°</th>' +
+            '<th style="' + C.TH + 'text-align:left;">Désignation des Travaux</th>' +
+            '<th width="6%" style="' + C.TH + 'text-align:center;">Unité</th>' +
+            '<th width="8%" style="' + C.TH + 'text-align:center;">Qté</th>' +
+            '<th width="13%" style="' + C.TH + 'text-align:right;">P.U. (DA)</th>' +
+            '<th width="14%" style="' + C.TH + 'text-align:right;">Montant HT</th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+            (rowsHtml || '<tr><td colspan="6" style="' + C.TD + 'text-align:center;color:#aaa;">Aucun article</td></tr>') +
+          '</tbody>' +
+          tfoot +
+        '</table>' +
+        C.pgF(pageNum++) +
+      '</div>';
+    }
+    return pages;
   }).join('');
 
+  /* ── Récapitulatif général ── */
   var recap =
     '<div style="' + C.PAGE + '">' + C.hdr() + C.sec('Récapitulatif Général DQE') +
     '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:16px;">' +
@@ -1523,19 +1563,49 @@ function genPDF(idx) {
     '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr>' +
       C.sig('Établi par', p.sig1) + C.sig('Vérifié par', p.sig2) + C.sig('Approuvé par', p.sig3) +
     '</tr></table>' +
-    C.pgF(3 + chaps.length) + '</div>';
+    C.pgF(pageNum) + '</div>';
 
+  /* ── Injection dans le DOM ──
+     CRITICAL: position:absolute (PAS fixed) + left:-9999px, top:0
+     html2canvas ne peut pas capturer les éléments en position:fixed hors viewport.
+     position:absolute garantit que le contenu est accessible dans le flux du document.
+  ── */
   var src = document.getElementById('pdf-src');
   src.innerHTML = cover + toc + chapPages + recap;
-  src.style.cssText = 'display:block;position:fixed;top:0;left:-9999px;width:730px;background:#fff;font-family:Arial,sans-serif;';
+  src.style.cssText = [
+    'display:block',
+    'position:absolute',
+    'left:-9999px',
+    'top:0',
+    'width:794px',
+    'background:#fff',
+    'overflow:visible',
+    'font-family:Arial,sans-serif',
+    'z-index:-1'
+  ].join(';') + ';';
 
+  /* ── Options html2pdf ──
+     margin:[5,5,5,5] → marges A4 propres, le contenu ne touche pas les bords.
+     windowWidth:794 → correspond exactement à la largeur A4 à 96dpi.
+     mode:'css' → respecte page-break-after:always et break-after:page sur chaque div.
+     scale:2 → rendu HD (Retina) sans distorsion.
+  ── */
   var opt = {
-    margin:      0,
+    margin:      [5, 5, 5, 5],
     filename:    'BQ_DQE_' + (p.nom || 'DQE').replace(/\s+/g,'_').substring(0,40) + '.pdf',
-    image:       { type:'jpeg', quality:.97 },
-    html2canvas: { scale:2, useCORS:true, windowWidth:730, scrollX:0, scrollY:0, logging:false },
-    jsPDF:       { unit:'mm', format:'a4', orientation:'portrait' },
-    pagebreak:   { mode:'avoid-all', before:'div[style*="page-break-after"]' }
+    image:       { type: 'jpeg', quality: 0.98 },
+    html2canvas: {
+      scale:          2,
+      useCORS:        true,
+      backgroundColor:'#ffffff',
+      windowWidth:    794,
+      scrollX:        0,
+      scrollY:        0,
+      logging:        false,
+      allowTaint:     false
+    },
+    jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak:   { mode: ['css', 'legacy'] }
   };
 
   html2pdf().set(opt).from(src).save().then(function() {
@@ -1543,6 +1613,11 @@ function genPDF(idx) {
     src.innerHTML     = '';
     notify('✓ PDF BTPH exporté !');
     addAct('PDF exporté', '"' + (p.nom || 'Projet') + '"', 'y');
+  }).catch(function(e) {
+    src.style.cssText = 'display:none;';
+    src.innerHTML     = '';
+    console.error('PDF error:', e);
+    notify('Erreur lors de la génération PDF');
   });
 }
 
