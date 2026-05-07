@@ -247,6 +247,35 @@ function updateSidebar() {
 /* ════════════════════════════════════════════
    CLOUD SAVE / LOAD — corrigé
 ════════════════════════════════════════════ */
+/* ════════════════════════════════════════════
+   SYNC — upload projets locaux vers le cloud
+   Appelé automatiquement lors de la connexion cloud
+════════════════════════════════════════════ */
+async function syncLocalToCloud() {
+  var local = JSON.parse(localStorage.getItem('bq_v3') || '[]');
+  if (!local.length) return 0;
+
+  notify('📤 Synchronisation de ' + local.length + ' projet(s) local/aux...');
+  var synced = 0;
+  for (var i = 0; i < local.length; i++) {
+    try {
+      /* Donner un nouvel id pour éviter les collisions */
+      var p = Object.assign({}, local[i], { id: Date.now() + '_' + i });
+      var ok = await supaInsertProject(p);
+      if (ok) synced++;
+    } catch(e) {
+      console.warn('Sync error for project', local[i].nom, e);
+    }
+  }
+  localStorage.removeItem('bq_v3');
+
+  if (synced > 0) {
+    notify('✓ ' + synced + ' projet(s) synchronisé(s) vers le cloud !');
+    addAct('☁ Sync cloud', synced + ' projet(s) importé(s)', 'g');
+  }
+  return synced;
+}
+
 async function loadCloudProjects() {
   /* Mode local : on lit le localStorage */
   if (!isCloudMode()) {
@@ -255,13 +284,13 @@ async function loadCloudProjects() {
     renderDash();
     return;
   }
-  /* Mode cloud : on vide le localStorage et on charge depuis Workers/D1 */
-  localStorage.removeItem('bq_v3');
+  /* Mode cloud : synchroniser les projets locaux puis charger depuis Workers/D1 */
+  await syncLocalToCloud();
   projects = [];
   try {
     var rows = await supaGetProjects();
     if (rows && Array.isArray(rows)) {
-      projects = rows;   // Workers renvoie déjà le JSON désérialisé
+      projects = rows;
     }
   } catch(e) {
     console.error('loadCloudProjects error:', e);
