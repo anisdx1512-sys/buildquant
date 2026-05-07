@@ -12,6 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # هذه هي الخطوة السحرية التي كانت تنقصنا!
+      - name: Install dependencies
+        working-directory: ./worker
+        run: npm install
+
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:
