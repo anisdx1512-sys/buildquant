@@ -19,6 +19,38 @@ function authHeaders(token) {
 }
 
 /* ════════════════════════════════════════════
+   LOCAL AUTH — mode hors ligne / offline fallback
+   Comptes stockés chiffrés dans localStorage
+════════════════════════════════════════════ */
+async function sha256hex(str) {
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str + 'BQ_LOCAL_SALT_2024'));
+  return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+async function localRegister(email, pw, prenom) {
+  var accounts = JSON.parse(localStorage.getItem('bq_accounts') || '{}');
+  if (accounts[email]) return { error: 'Email déjà utilisé (compte local)' };
+  var hash = await sha256hex(pw);
+  var userId = 'local_' + Date.now();
+  accounts[email] = { id: userId, email: email, prenom: prenom, hash: hash };
+  localStorage.setItem('bq_accounts', JSON.stringify(accounts));
+  return { access_token: 'local_' + userId, user: { id: userId, email: email, user_metadata: { prenom: prenom } } };
+}
+
+async function localLogin(email, pw) {
+  var accounts = JSON.parse(localStorage.getItem('bq_accounts') || '{}');
+  if (!accounts[email]) return { error: 'Aucun compte local pour cet email' };
+  var hash = await sha256hex(pw);
+  if (accounts[email].hash !== hash) return { error: 'Mot de passe incorrect' };
+  var a = accounts[email];
+  return { access_token: 'local_' + a.id, user: { id: a.id, email: email, user_metadata: { prenom: a.prenom } } };
+}
+
+function isCloudMode() {
+  return !!(currentUser && accessToken && typeof accessToken === 'string' && !accessToken.startsWith('local_'));
+}
+
+/* ════════════════════════════════════════════
    AUTH FUNCTIONS — Workers endpoints
 ════════════════════════════════════════════ */
 async function supaRegister(email, pw, prenom) {
@@ -116,8 +148,17 @@ async function doLogin() {
     onLogin();
   } catch(e) {
     document.getElementById('auth-login-btn').textContent = 'Se connecter';
-    errEl.textContent = 'Erreur réseau. Vérifiez votre connexion.';
-    errEl.style.display = 'block';
+    var lr = await localLogin(email, pw);
+    if (!lr.error) {
+      accessToken = lr.access_token;
+      currentUser = lr.user;
+      saveSession(currentUser, accessToken);
+      notify('📴 Mode hors ligne — compte local');
+      onLogin();
+    } else {
+      errEl.textContent = 'Hors ligne. ' + (lr.error === 'Aucun compte local pour cet email' ? 'Aucun compte local trouvé — créez un compte d\'abord.' : lr.error);
+      errEl.style.display = 'block';
+    }
   }
 }
 
@@ -145,18 +186,29 @@ async function doRegister() {
     }
   } catch(e) {
     document.getElementById('auth-reg-btn').textContent = 'Créer mon compte gratuit';
-    errEl.textContent = 'Erreur réseau. Vérifiez votre connexion.';
-    errEl.style.display = 'block';
+    var lr = await localRegister(email, pw, prenom);
+    if (!lr.error) {
+      accessToken = lr.access_token;
+      currentUser = lr.user;
+      saveSession(currentUser, accessToken);
+      notify('📴 Compte créé en mode hors ligne');
+      onLogin();
+    } else {
+      errEl.textContent = 'Hors ligne. ' + lr.error;
+      errEl.style.display = 'block';
+    }
   }
 }
 
 /* ── LOGOUT — corrigé : appelle Workers endpoint ── */
 async function doLogout() {
   try {
-    await fetch(API + '/auth/logout', {
-      method: 'POST',
-      headers: authHeaders(accessToken)
-    });
+    if (isCloudMode()) {
+      await fetch(API + '/auth/logout', {
+        method: 'POST',
+        headers: authHeaders(accessToken)
+      });
+    }
   } catch(e) {}
   currentUser  = null;
   accessToken  = null;
@@ -197,7 +249,7 @@ function updateSidebar() {
 ════════════════════════════════════════════ */
 async function loadCloudProjects() {
   /* Mode local : on lit le localStorage */
-  if (!currentUser || currentUser.id === 'local') {
+  if (!isCloudMode()) {
     projects = JSON.parse(localStorage.getItem('bq_v3') || '[]');
     document.getElementById('nb-projects').textContent = projects.length;
     renderDash();
@@ -860,7 +912,7 @@ async function saveProject() {
 
   var isEdit = (editingIndex >= 0 && editingIndex < projects.length);
 
-  if (currentUser && currentUser.id !== 'local' && accessToken) {
+  if (isCloudMode()) {
     notify('☁ Sauvegarde cloud...');
     try {
       var ok = await supaInsertProject(d);
@@ -919,7 +971,7 @@ function resetForm() {
 ════════════════════════════════════════════ */
 function renderDash() {
   /* Mode local : re-lire le localStorage */
-  if (!currentUser || currentUser.id === 'local') {
+  if (!isCloudMode()) {
     projects = JSON.parse(localStorage.getItem('bq_v3') || '[]');
   }
   document.getElementById('s-total').textContent   = projects.length;
@@ -946,7 +998,7 @@ function renderDash() {
 }
 
 function renderProjects() {
-  if (currentUser && currentUser.id !== 'local' && accessToken) {
+  if (isCloudMode()) {
     supaGetProjects().then(function(rows) {
       if (rows && Array.isArray(rows)) projects = rows;
       _doRenderProjects();
@@ -996,7 +1048,7 @@ function delProj(i) {
     var p = projects[i];
     projects.splice(i, 1);
 
-    if (currentUser && currentUser.id !== 'local' && accessToken && p && p.id) {
+    if (isCloudMode() && p && p.id) {
       supaDeleteProject(String(p.id)).catch(function(e) { console.warn('Cloud delete error:', e); });
     } else {
       localStorage.setItem('bq_v3', JSON.stringify(projects));
@@ -1020,7 +1072,7 @@ async function cleanDuplicates() {
   });
   projects = unique;
 
-  if (currentUser && currentUser.id !== 'local' && accessToken) {
+  if (isCloudMode()) {
     /* Supprimer tout puis re-insérer les uniques */
     for (var i = 0; i < projects.length; i++) {
       await supaInsertProject(projects[i]);
