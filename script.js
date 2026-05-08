@@ -4,7 +4,6 @@
    ⚠ remplacez YOUR_SUBDOMAIN par votre sous-domaine réel
 ════════════════════════════════════════════ */
 var API = '/api';
-
 var currentUser  = null;
 var accessToken  = null;
 var editingIndex = -1;   // ← déclaré UNE SEULE FOIS (bug corrigé)
