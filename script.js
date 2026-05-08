@@ -106,6 +106,15 @@ async function supaDeleteProject(id) {
   return r.ok;
 }
 
+async function supaUpdateProject(id, data) {
+  var r = await fetch(API + '/projects/' + encodeURIComponent(id), {
+    method: 'PUT',
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(data)
+  });
+  return r.ok;
+}
+
 /* ════════════════════════════════════════════
    SESSION STORAGE
 ════════════════════════════════════════════ */
@@ -1101,8 +1110,9 @@ function collectData() {
   });
   var tva  = parseInt(document.getElementById('p-tva').value) || 0;
   var tvaV = grandHT * tva / 100;
+  /* NOTE: id is intentionally omitted here — saveProject() assigns the correct
+     id depending on whether we are creating (Date.now()) or editing (original id). */
   return {
-    id:       Date.now(),
     nom:      document.getElementById('p-nom').value    || 'Projet sans titre',
     mo:       document.getElementById('p-mo').value,
     wilaya:   document.getElementById('p-wilaya').value,
@@ -1123,19 +1133,35 @@ function collectData() {
   };
 }
 
-/* ── saveProject — corrigé : met à jour projects[] après sauvegarde cloud ── */
+/* ── saveProject ── */
 async function saveProject() {
   var d = collectData();
   if (!d.nom || d.nom === 'Projet sans titre') { notify('⚠ Saisissez un nom de projet'); return; }
 
   var isEdit = (editingIndex >= 0 && editingIndex < projects.length);
 
+  /* FIX: preserve the original project id when editing.
+     collectData() no longer generates an id so:
+     - edit  → reuse projects[editingIndex].id  (ensures UPDATE not INSERT)
+     - create → generate a fresh Date.now() id                              */
+  if (isEdit) {
+    d.id = projects[editingIndex].id;
+  } else {
+    d.id = Date.now();
+  }
+
   if (isCloudMode()) {
     notify('☁ Sauvegarde cloud...');
     try {
-      var ok = await supaInsertProject(d);
+      var ok;
+      if (isEdit && d.id) {
+        /* PUT /projects/:id → UPDATE on the worker (new endpoint) */
+        ok = await supaUpdateProject(String(d.id), d);
+      } else {
+        /* POST /projects → INSERT */
+        ok = await supaInsertProject(d);
+      }
       if (ok) {
-        /* Mettre à jour le tableau local projects[] */
         if (isEdit) {
           projects[editingIndex] = d;
         } else {
@@ -1148,6 +1174,7 @@ async function saveProject() {
         notify('⚠ Erreur cloud — réessayez');
       }
     } catch(e) {
+      console.error('saveProject error:', e);
       notify('⚠ Erreur réseau — vérifiez votre connexion');
     }
   } else {
@@ -1278,22 +1305,44 @@ function delProj(i) {
   }
 }
 
-/* ── cleanDuplicates — corrigé : utilise Workers API ── */
+/* ── cleanDuplicates ── */
 async function cleanDuplicates() {
   if (!confirm('Supprimer tous les doublons ? (garde le plus récent de chaque projet)')) return;
   notify('🧹 Nettoyage en cours...');
 
-  var seen   = {};
-  var unique = [];
+  /* The list comes ordered by updated_at DESC (most recent first).
+     So the FIRST time we see a given key we keep it; subsequent ones are duplicates.
+     Key = nom + total HT so only true duplicates are caught. */
+  var seen     = {};
+  var unique   = [];
+  var toDelete = [];   /* ids of duplicate rows to DELETE from D1 */
+
   projects.forEach(function(p) {
-    if (!seen[p.nom]) { seen[p.nom] = true; unique.push(p); }
+    var key = (p.nom || '').trim().toLowerCase() + '|' + (p.ht || 0);
+    if (!seen[key]) {
+      seen[key] = true;
+      unique.push(p);
+    } else {
+      /* This is a duplicate — collect its id for physical deletion */
+      if (p.id) toDelete.push(String(p.id));
+    }
   });
+
+  var removed = toDelete.length;
   projects = unique;
 
   if (isCloudMode()) {
-    /* Supprimer tout puis re-insérer les uniques */
-    for (var i = 0; i < projects.length; i++) {
-      await supaInsertProject(projects[i]);
+    /* FIX: physically DELETE each duplicate row from D1.
+       The unique rows already exist — no re-insert needed. */
+    var failed = 0;
+    for (var i = 0; i < toDelete.length; i++) {
+      var ok = await supaDeleteProject(toDelete[i]);
+      if (!ok) failed++;
+    }
+    if (failed > 0) {
+      notify('⚠ ' + failed + ' suppression(s) échouée(s) — rechargez et réessayez');
+      renderProjects();
+      return;
     }
   } else {
     localStorage.setItem('bq_v3', JSON.stringify(projects));
@@ -1301,14 +1350,20 @@ async function cleanDuplicates() {
 
   document.getElementById('nb-projects').textContent = projects.length;
   renderProjects();
-  notify('✓ Doublons supprimés — ' + projects.length + ' projets conservés');
+  if (removed === 0) {
+    notify('✓ Aucun doublon détecté');
+  } else {
+    notify('✓ ' + removed + ' doublon(s) supprimé(s) — ' + projects.length + ' projets conservés');
+  }
 }
 
 function editProject(idx) {
   var p = projects[idx];
   if (!p) return;
-  editingIndex = idx;
+  /* FIX: call resetForm() FIRST (it sets editingIndex = -1),
+     then set editingIndex AFTER so it is not clobbered. */
   resetForm();
+  editingIndex = idx;
   nav('new-project', null);
   setTimeout(function() {
     var flds = {

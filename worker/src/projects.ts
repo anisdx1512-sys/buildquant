@@ -39,6 +39,23 @@ app.post('/', async (c) => {
   return c.json({ ok: true })
 })
 
+// PUT — update an existing project (edit flow)
+// Uses UPDATE ... WHERE id = ? AND user_id = ? for security:
+// a user can only overwrite their own rows.
+app.put('/:id', async (c) => {
+  const userId = c.get('userId')
+  const id     = c.req.param('id')
+  const data   = await c.req.json()
+  const result = await c.env.DB.prepare(
+    'UPDATE projects SET nom = ?, data = ?, updated_at = ? WHERE id = ? AND user_id = ?'
+  ).bind(data.nom, JSON.stringify(data), new Date().toISOString(), id, userId).run()
+  // meta.changes === 0 means the id did not exist for this user → treat as 404
+  if ((result.meta as any)?.changes === 0) {
+    return c.json({ error: 'Projet introuvable' }, 404)
+  }
+  return c.json({ ok: true })
+})
+
 // DELETE
 app.delete('/:id', async (c) => {
   const userId = c.get('userId')
