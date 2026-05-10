@@ -1,27 +1,19 @@
 /* ════════════════════════════════════════════
    CLOUDFLARE WORKERS — BuildQuant v4
    API Backend : Cloudflare Workers + D1
-   ⚠ remplacez YOUR_SUBDOMAIN par votre sous-domaine réel
 ════════════════════════════════════════════ */
-var API = '/api';
 
+var API = '/api';
 var currentUser  = null;
 var accessToken  = null;
-var editingIndex = -1;   // ← déclaré UNE SEULE FOIS (bug corrigé)
+var editingIndex = -1;
 
-/* ════════════════════════════════════════════
-   HEADERS — Cloudflare (plus d'apikey Supabase)
-════════════════════════════════════════════ */
 function authHeaders(token) {
   var h = { 'Content-Type': 'application/json' };
   if (token) h['Authorization'] = 'Bearer ' + token;
   return h;
 }
 
-/* ════════════════════════════════════════════
-   LOCAL AUTH — mode hors ligne / offline fallback
-   Comptes stockés chiffrés dans localStorage
-════════════════════════════════════════════ */
 async function sha256hex(str) {
   var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str + 'BQ_LOCAL_SALT_2024'));
   return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
@@ -50,9 +42,6 @@ function isCloudMode() {
   return !!(currentUser && accessToken && typeof accessToken === 'string' && !accessToken.startsWith('local_'));
 }
 
-/* ════════════════════════════════════════════
-   AUTH FUNCTIONS — Workers endpoints
-════════════════════════════════════════════ */
 async function supaRegister(email, pw, prenom) {
   var r = await fetch(API + '/auth/register', {
     method: 'POST',
@@ -72,15 +61,10 @@ async function supaLogin(email, pw) {
 }
 
 async function supaGetUser(token) {
-  var r = await fetch(API + '/auth/user', {
-    headers: authHeaders(token)
-  });
+  var r = await fetch(API + '/auth/user', { headers: authHeaders(token) });
   return await r.json();
 }
 
-/* ════════════════════════════════════════════
-   DB FUNCTIONS — Workers endpoints
-════════════════════════════════════════════ */
 async function supaInsertProject(data) {
   var r = await fetch(API + '/projects', {
     method: 'POST',
@@ -91,9 +75,7 @@ async function supaInsertProject(data) {
 }
 
 async function supaGetProjects() {
-  var r = await fetch(API + '/projects', {
-    headers: authHeaders(accessToken)
-  });
+  var r = await fetch(API + '/projects', { headers: authHeaders(accessToken) });
   if (!r.ok) return null;
   return await r.json();
 }
@@ -115,9 +97,6 @@ async function supaUpdateProject(id, data) {
   return r.ok;
 }
 
-/* ════════════════════════════════════════════
-   SESSION STORAGE
-════════════════════════════════════════════ */
 function saveSession(user, token) {
   localStorage.setItem('bq_session', JSON.stringify({ user: user, token: token, ts: Date.now() }));
 }
@@ -131,9 +110,6 @@ function loadSession() {
 }
 function clearSession() { localStorage.removeItem('bq_session'); }
 
-/* ════════════════════════════════════════════
-   AUTH OVERLAY
-════════════════════════════════════════════ */
 function showAuthOverlay() { document.getElementById('auth-overlay').style.display = 'flex'; }
 function hideAuthOverlay() { document.getElementById('auth-overlay').style.display = 'none'; }
 
@@ -165,7 +141,7 @@ async function doLogin() {
       notify('📴 Mode hors ligne — compte local');
       onLogin();
     } else {
-      errEl.textContent = 'Hors ligne. ' + (lr.error === 'Aucun compte local pour cet email' ? 'Aucun compte local trouvé — créez un compte d\'abord.' : lr.error);
+      errEl.textContent = 'Hors ligne. ' + (lr.error === 'Aucun compte local pour cet email' ? "Aucun compte local trouvé — créez un compte d'abord." : lr.error);
       errEl.style.display = 'block';
     }
   }
@@ -209,14 +185,10 @@ async function doRegister() {
   }
 }
 
-/* ── LOGOUT — corrigé : appelle Workers endpoint ── */
 async function doLogout() {
   try {
     if (isCloudMode()) {
-      await fetch(API + '/auth/logout', {
-        method: 'POST',
-        headers: authHeaders(accessToken)
-      });
+      await fetch(API + '/auth/logout', { method: 'POST', headers: authHeaders(accessToken) });
     }
   } catch(e) {}
   currentUser  = null;
@@ -253,31 +225,19 @@ function updateSidebar() {
   document.getElementById('sb-email').textContent  = currentUser.email;
 }
 
-/* ════════════════════════════════════════════
-   CLOUD SAVE / LOAD — corrigé
-════════════════════════════════════════════ */
-/* ════════════════════════════════════════════
-   SYNC — upload projets locaux vers le cloud
-   Appelé automatiquement lors de la connexion cloud
-════════════════════════════════════════════ */
 async function syncLocalToCloud() {
   var local = JSON.parse(localStorage.getItem('bq_v3') || '[]');
   if (!local.length) return 0;
-
   notify('📤 Synchronisation de ' + local.length + ' projet(s) local/aux...');
   var synced = 0;
   for (var i = 0; i < local.length; i++) {
     try {
-      /* Donner un nouvel id pour éviter les collisions */
       var p = Object.assign({}, local[i], { id: Date.now() + '_' + i });
       var ok = await supaInsertProject(p);
       if (ok) synced++;
-    } catch(e) {
-      console.warn('Sync error for project', local[i].nom, e);
-    }
+    } catch(e) { console.warn('Sync error for project', local[i].nom, e); }
   }
   localStorage.removeItem('bq_v3');
-
   if (synced > 0) {
     notify('✓ ' + synced + ' projet(s) synchronisé(s) vers le cloud !');
     addAct('☁ Sync cloud', synced + ' projet(s) importé(s)', 'g');
@@ -286,24 +246,18 @@ async function syncLocalToCloud() {
 }
 
 async function loadCloudProjects() {
-  /* Mode local : on lit le localStorage */
   if (!isCloudMode()) {
     projects = JSON.parse(localStorage.getItem('bq_v3') || '[]');
     document.getElementById('nb-projects').textContent = projects.length;
     renderDash();
     return;
   }
-  /* Mode cloud : synchroniser les projets locaux puis charger depuis Workers/D1 */
   await syncLocalToCloud();
   projects = [];
   try {
     var rows = await supaGetProjects();
-    if (rows && Array.isArray(rows)) {
-      projects = rows;
-    }
-  } catch(e) {
-    console.error('loadCloudProjects error:', e);
-  }
+    if (rows && Array.isArray(rows)) projects = rows;
+  } catch(e) { console.error('loadCloudProjects error:', e); }
   document.getElementById('nb-projects').textContent = projects.length;
   renderDash();
 }
@@ -313,14 +267,12 @@ async function checkSession() {
   if (s && s.user && s.token) {
     currentUser = s.user;
     accessToken = s.token;
-    console.log('Session restored, token:', accessToken ? 'OK' : 'NULL');
     onLogin();
   } else {
     showAuthOverlay();
   }
 }
 
-/* stubs conservés pour compatibilité */
 function initSupabase()      { return true; }
 function waitForSupabase(cb) { cb(); }
 
@@ -337,9 +289,6 @@ function switchAuthTab(tab) {
   });
 }
 
-/* ════════════════════════════════════════════
-   MOT DE PASSE OUBLIÉ — cloud + local
-════════════════════════════════════════════ */
 var resetContext = { email: '', type: '' };
 
 async function doForgotPassword() {
@@ -347,12 +296,9 @@ async function doForgotPassword() {
   var errEl = document.getElementById('forgot-error');
   errEl.style.display = 'none';
   if (!email) { errEl.textContent = 'Entrez votre adresse email.'; errEl.style.display = 'block'; return; }
-
   var btn = document.getElementById('forgot-btn');
   btn.textContent = 'Génération...';
   btn.disabled = true;
-
-  /* Essayer d'abord le compte local */
   var accounts = JSON.parse(localStorage.getItem('bq_accounts') || '{}');
   if (accounts[email]) {
     var code = String(Math.floor(100000 + Math.random() * 900000));
@@ -364,13 +310,9 @@ async function doForgotPassword() {
     btn.disabled = false;
     return;
   }
-
-  /* Sinon essayer le cloud */
   try {
     var r = await fetch(API + '/auth/forgot-password', {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ email: email })
+      method: 'POST', headers: authHeaders(), body: JSON.stringify({ email: email })
     });
     var data = await r.json();
     btn.textContent = 'Recevoir le code';
@@ -402,16 +344,12 @@ async function doResetPassword() {
   var pw2   = document.getElementById('reset-pw2').value;
   var errEl = document.getElementById('reset-error');
   errEl.style.display = 'none';
-
   if (!code || !pw || !pw2)  { errEl.textContent = 'Remplissez tous les champs.'; errEl.style.display = 'block'; return; }
   if (pw !== pw2)            { errEl.textContent = 'Les mots de passe ne correspondent pas.'; errEl.style.display = 'block'; return; }
   if (pw.length < 8)         { errEl.textContent = 'Mot de passe min. 8 caractères.'; errEl.style.display = 'block'; return; }
-
   var btn = document.getElementById('reset-btn');
   btn.textContent = 'Réinitialisation...';
   btn.disabled = true;
-
-  /* Mode local */
   if (resetContext.type === 'local') {
     var pending = JSON.parse(localStorage.getItem('bq_pending_reset') || 'null');
     btn.textContent = 'Réinitialiser le mot de passe';
@@ -427,12 +365,9 @@ async function doResetPassword() {
     switchAuthTab('login');
     return;
   }
-
-  /* Mode cloud */
   try {
     var r = await fetch(API + '/auth/reset-password', {
-      method: 'POST',
-      headers: authHeaders(),
+      method: 'POST', headers: authHeaders(),
       body: JSON.stringify({ email: resetContext.email, code: code, new_password: pw })
     });
     var data = await r.json();
@@ -449,9 +384,6 @@ async function doResetPassword() {
   }
 }
 
-/* ════════════════════════════════════════════
-   CHANGER LE MOT DE PASSE (utilisateur connecté)
-════════════════════════════════════════════ */
 function showChangePw() {
   var modal = document.getElementById('changepw-modal');
   modal.style.display = 'flex';
@@ -475,17 +407,13 @@ async function doChangePw() {
   var pw2     = document.getElementById('changepw-confirm').value;
   var errEl   = document.getElementById('changepw-error');
   errEl.style.display = 'none';
-
   if (!current || !pw || !pw2)  { errEl.textContent = 'Remplissez tous les champs.'; errEl.style.display = 'block'; return; }
   if (pw !== pw2)               { errEl.textContent = 'Les nouveaux mots de passe ne correspondent pas.'; errEl.style.display = 'block'; return; }
   if (pw.length < 8)            { errEl.textContent = 'Nouveau mot de passe : min. 8 caractères.'; errEl.style.display = 'block'; return; }
-  if (current === pw)           { errEl.textContent = 'Le nouveau mot de passe doit être différent de l\'ancien.'; errEl.style.display = 'block'; return; }
-
+  if (current === pw)           { errEl.textContent = "Le nouveau mot de passe doit être différent de l'ancien."; errEl.style.display = 'block'; return; }
   var btn = document.getElementById('changepw-btn');
   btn.textContent = 'Enregistrement...';
   btn.disabled = true;
-
-  /* ── Compte local ── */
   if (!isCloudMode()) {
     var accounts = JSON.parse(localStorage.getItem('bq_accounts') || '{}');
     var acc = accounts[currentUser.email];
@@ -500,12 +428,9 @@ async function doChangePw() {
     notify('✓ Mot de passe local mis à jour !');
     return;
   }
-
-  /* ── Compte cloud ── */
   try {
     var r = await fetch(API + '/auth/change-password', {
-      method: 'POST',
-      headers: authHeaders(),
+      method: 'POST', headers: authHeaders(),
       body: JSON.stringify({ current_password: current, new_password: pw })
     });
     var data = await r.json();
@@ -523,12 +448,9 @@ async function doChangePw() {
 }
 
 /* ════════════════════════════════════════════
-   BCR DATABASE — 230 articles, 5 corps d'état
-   Source: BCR MHUV Algérie 2024
-   Zones: nord / hauts / sud
+   BCR DATABASE — 230 articles
 ════════════════════════════════════════════ */
 var BCR = [
-  /* ── VRD : Terrassement ── */
   {id:'T01',corps:'VRD',corpsLabel:'VRD',chap:'Terrassement',nom:"Déblai en terrain ordinaire (TO) — pelle mécanique",u:'m³',n:650,h:580,s:520,note:'Terrain meuble'},
   {id:'T02',corps:'VRD',corpsLabel:'VRD',chap:'Terrassement',nom:"Déblai en terrain semi-rocheux (TSR)",u:'m³',n:1200,h:1100,s:980,note:'Rippers nécessaires'},
   {id:'T03',corps:'VRD',corpsLabel:'VRD',chap:'Terrassement',nom:"Déblai en terrain rocheux — à l'explosif",u:'m³',n:2200,h:2000,s:1800,note:'Minage inclus'},
@@ -549,7 +471,6 @@ var BCR = [
   {id:'T18',corps:'VRD',corpsLabel:'VRD',chap:'Terrassement',nom:"Abattage arbres Ø 30–60cm + dessouchage",u:'U',n:4500,h:4000,s:3500,note:'Évacuation bois incluse'},
   {id:'T19',corps:'VRD',corpsLabel:'VRD',chap:'Terrassement',nom:"Géotextile de séparation 200g/m²",u:'m²',n:280,h:260,s:240,note:'Recouvrement 30cm'},
   {id:'T20',corps:'VRD',corpsLabel:'VRD',chap:'Terrassement',nom:"Géotextile drainant 300g/m²",u:'m²',n:380,h:350,s:320,note:'Zones humides / talus'},
-  /* ── VRD : Assainissement ── */
   {id:'A01',corps:'VRD',corpsLabel:'VRD',chap:'Assainissement',nom:"Canalisation béton non armé Ø200 cl.135A",u:'ml',n:2200,h:2000,s:1800,note:'Joint caoutchouc'},
   {id:'A02',corps:'VRD',corpsLabel:'VRD',chap:'Assainissement',nom:"Canalisation béton non armé Ø300 cl.135A",u:'ml',n:3200,h:2900,s:2600,note:''},
   {id:'A03',corps:'VRD',corpsLabel:'VRD',chap:'Assainissement',nom:"Canalisation béton non armé Ø400 cl.135A",u:'ml',n:4800,h:4400,s:4000,note:''},
@@ -570,7 +491,6 @@ var BCR = [
   {id:'A18',corps:'VRD',corpsLabel:'VRD',chap:'Assainissement',nom:"Séparateur à graisse béton armé 500L",u:'U',n:45000,h:41000,s:37000,note:''},
   {id:'A19',corps:'VRD',corpsLabel:'VRD',chap:'Assainissement',nom:"Déversoir d'orage béton armé (ouvrage type)",u:'U',n:120000,h:110000,s:100000,note:'Selon débit'},
   {id:'A20',corps:'VRD',corpsLabel:'VRD',chap:'Assainissement',nom:"Essai d'étanchéité canalisation (test eau)",u:'ml',n:180,h:165,s:150,note:'Norme EN 1610'},
-  /* ── VRD : AEP ── */
   {id:'P01',corps:'VRD',corpsLabel:'VRD',chap:'AEP',nom:"Conduite PEHD Ø63 PN16 (PE100)",u:'ml',n:1800,h:1640,s:1480,note:''},
   {id:'P02',corps:'VRD',corpsLabel:'VRD',chap:'AEP',nom:"Conduite PEHD Ø90 PN16",u:'ml',n:2400,h:2200,s:2000,note:''},
   {id:'P03',corps:'VRD',corpsLabel:'VRD',chap:'AEP',nom:"Conduite PEHD Ø110 PN16",u:'ml',n:3200,h:2900,s:2600,note:'Réseau principal'},
@@ -589,7 +509,6 @@ var BCR = [
   {id:'P16',corps:'VRD',corpsLabel:'VRD',chap:'AEP',nom:"Regard de comptage béton armé 80×80",u:'U',n:28000,h:25500,s:23000,note:'Cadre + couvercle'},
   {id:'P17',corps:'VRD',corpsLabel:'VRD',chap:'AEP',nom:"Ventouse automatique triple effet Ø2\"",u:'U',n:8500,h:7700,s:7000,note:'Points hauts réseau'},
   {id:'P18',corps:'VRD',corpsLabel:'VRD',chap:'AEP',nom:"Vidange / purge automatique Ø2\"",u:'U',n:6500,h:5900,s:5300,note:'Points bas réseau'},
-  /* ── VRD : Enrobé/Voirie ── */
   {id:'V01',corps:'VRD',corpsLabel:'VRD',chap:'Voirie / Enrobé',nom:"GNT 0/31.5 — couche de fondation (ep. 20cm compacté)",u:'m²',n:480,h:440,s:400,note:'OPM ≥ 95%'},
   {id:'V02',corps:'VRD',corpsLabel:'VRD',chap:'Voirie / Enrobé',nom:"GNT 0/20 — couche de base (ep. 15cm compacté)",u:'m²',n:520,h:475,s:430,note:''},
   {id:'V03',corps:'VRD',corpsLabel:'VRD',chap:'Voirie / Enrobé',nom:"Grave traitée ciment GTC 0/20 (ep. 15cm)",u:'m²',n:780,h:710,s:650,note:'Rc28j ≥ 5MPa'},
@@ -610,7 +529,6 @@ var BCR = [
   {id:'V18',corps:'VRD',corpsLabel:'VRD',chap:'Voirie / Enrobé',nom:"Signalisation verticale panneau A (triangle)",u:'U',n:4500,h:4100,s:3700,note:'Mât galvanisé inclus'},
   {id:'V19',corps:'VRD',corpsLabel:'VRD',chap:'Voirie / Enrobé',nom:"Glissière sécurité GBA béton (New Jersey)",u:'ml',n:12000,h:10900,s:9900,note:'Préfabriqué'},
   {id:'V20',corps:'VRD',corpsLabel:'VRD',chap:'Voirie / Enrobé',nom:"Éclairage public mât 8m + luminaire LED 80W",u:'U',n:85000,h:77400,s:70300,note:'Câblage non inclus'},
-  /* ── Gros Œuvre ── */
   {id:'F01',corps:'GO',corpsLabel:'Gros Œuvre',chap:'Fondations',nom:"Béton de propreté dosé 150 kg/m³ (ep. 10cm)",u:'m³',n:9500,h:8700,s:7900,note:'Sous semelles'},
   {id:'F02',corps:'GO',corpsLabel:'Gros Œuvre',chap:'Fondations',nom:"Fouille en pleine masse pour fondations",u:'m³',n:850,h:780,s:710,note:'TO'},
   {id:'F03',corps:'GO',corpsLabel:'Gros Œuvre',chap:'Fondations',nom:"Semelle filante béton armé — dosage 350 kg/m³",u:'m³',n:28000,h:25500,s:23000,note:'Coffrage+ferraillage'},
@@ -637,7 +555,6 @@ var BCR = [
   {id:'M04',corps:'GO',corpsLabel:'Gros Œuvre',chap:'Maçonnerie',nom:"Briques creuses 10 trous 20cm — mur extérieur",u:'m²',n:1350,h:1229,s:1120,note:''},
   {id:'M05',corps:'GO',corpsLabel:'Gros Œuvre',chap:'Maçonnerie',nom:"Double cloison briques 10+10cm + lame air",u:'m²',n:2400,h:2184,s:1989,note:'Façade isolation'},
   {id:'M06',corps:'GO',corpsLabel:'Gros Œuvre',chap:'Maçonnerie',nom:"Agglos creux 20×20×40 — mur porteur",u:'m²',n:1650,h:1502,s:1368,note:''},
-  /* ── Second Œuvre ── */
   {id:'E01',corps:'SO',corpsLabel:'Second Œuvre',chap:'Plâtrerie / Enduits',nom:"Enduit de plâtre intérieur — 3 couches",u:'m²',n:1200,h:1092,s:994,note:'ep. 15mm'},
   {id:'E02',corps:'SO',corpsLabel:'Second Œuvre',chap:'Plâtrerie / Enduits',nom:"Enduit ciment hydrofugé extérieur — 3 couches",u:'m²',n:1450,h:1320,s:1202,note:'ep. 20mm'},
   {id:'E03',corps:'SO',corpsLabel:'Second Œuvre',chap:'Plâtrerie / Enduits',nom:"Enduit de rebouchage et lissage",u:'m²',n:480,h:437,s:398,note:'Avant peinture'},
@@ -660,7 +577,6 @@ var BCR = [
   {id:'PT2',corps:'SO',corpsLabel:'Second Œuvre',chap:'Peinture',nom:"Peinture acrylique extérieure — 3 couches",u:'m²',n:950,h:865,s:788,note:'Résistance UV'},
   {id:'PT3',corps:'SO',corpsLabel:'Second Œuvre',chap:'Peinture',nom:"Peinture glycérophtalique — portes+boiseries",u:'m²',n:800,h:728,s:663,note:''},
   {id:'PT4',corps:'SO',corpsLabel:'Second Œuvre',chap:'Peinture',nom:"Peinture époxy sol (garage + sous-sol)",u:'m²',n:1800,h:1638,s:1491,note:'2 couches 200µ'},
-  /* ── Électricité / Plomberie / CVC ── */
   {id:'EL1',corps:'EP',corpsLabel:'Élec / Plomb / CVC',chap:'Électricité',nom:"Tableau divisionnaire TDB 24 modules (câblé)",u:'U',n:35000,h:31900,s:29000,note:'Disjoncteurs inclus'},
   {id:'EL2',corps:'EP',corpsLabel:'Élec / Plomb / CVC',chap:'Électricité',nom:"Câble U-1000 R2V 3×2.5mm² — pose en gaine",u:'ml',n:680,h:619,s:564,note:'Circuits prise'},
   {id:'EL3',corps:'EP',corpsLabel:'Élec / Plomb / CVC',chap:'Électricité',nom:"Câble U-1000 R2V 3×1.5mm² — pose en gaine",u:'ml',n:580,h:528,s:481,note:'Circuits éclairage'},
@@ -684,7 +600,6 @@ var BCR = [
   {id:'CVC3',corps:'EP',corpsLabel:'Élec / Plomb / CVC',chap:'CVC',nom:"Climatiseur split mural 18000 BTU",u:'U',n:145000,h:131950,s:120183,note:''},
   {id:'CVC4',corps:'EP',corpsLabel:'Élec / Plomb / CVC',chap:'CVC',nom:"Climatiseur cassette 24000 BTU",u:'U',n:220000,h:200200,s:182300,note:'Faux-plafond'},
   {id:'CVC5',corps:'EP',corpsLabel:'Élec / Plomb / CVC',chap:'CVC',nom:"Ventilateur extracteur salle de bain 100m³/h",u:'U',n:8500,h:7735,s:7045,note:''},
-  /* ── Menuiserie ── */
   {id:'AL1',corps:'MEN',corpsLabel:'Menuiserie',chap:'Aluminium',nom:"Fenêtre aluminium 1 vantail 60×120 — double vitrage",u:'U',n:18000,h:16380,s:14912,note:'Profil 60mm'},
   {id:'AL2',corps:'MEN',corpsLabel:'Menuiserie',chap:'Aluminium',nom:"Fenêtre aluminium 2 vantaux 120×120 — double vitrage",u:'U',n:28000,h:25480,s:23197,note:''},
   {id:'AL3',corps:'MEN',corpsLabel:'Menuiserie',chap:'Aluminium',nom:"Porte-fenêtre aluminium 2 vantaux 140×220",u:'U',n:45000,h:40950,s:37287,note:''},
@@ -707,7 +622,6 @@ var BCR = [
 
 document.getElementById('nb-bcr').textContent = BCR.length;
 
-/* Corps meta */
 var CORPS_META = {
   VRD: { label: 'VRD',          cls: 'corps-vrd' },
   GO:  { label: 'Gros Œuvre',   cls: 'corps-go'  },
@@ -716,9 +630,6 @@ var CORPS_META = {
   MEN: { label: 'Menuiserie',   cls: 'corps-men' },
 };
 
-/* ════════════════════════════════════════════
-   STATE
-════════════════════════════════════════════ */
 var projects      = [];
 var chapCounter   = 0;
 var rowCounters   = {};
@@ -728,15 +639,12 @@ var activeZonePage= 'nord';
 var bcrFilter     = 'all';
 var bcrPageFilter = 'all';
 
-/* ════════════════════════════════════════════
-   NAVIGATION
-════════════════════════════════════════════ */
 var PT = {
   dashboard:     ['Tableau de bord',    "Vue d'ensemble de vos projets"],
   projects:      ['Mes Projets DQE',    'Tous vos projets structurés par chapitres'],
   'new-project': ['Nouveau Projet DQE', 'BCR intégrée — insérez les articles instantanément'],
   bcr:           ['Recherche BCR',      "Base de Coûts de Référence — 5 corps d'état · 3 zones"],
-  'bcr-browse':  ['Catalogue BCR',      'Tous les articles classés par corps d\'état'],
+  'bcr-browse':  ['Catalogue BCR',      "Tous les articles classés par corps d'état"],
 };
 var BN_MAP = {
   'dashboard':   'bn-dash',
@@ -764,9 +672,6 @@ function nav(page, el) {
   if (page === 'bcr-browse')  initBCRBrowse();
 }
 
-/* ════════════════════════════════════════════
-   ZONE
-════════════════════════════════════════════ */
 function setZone(z) {
   activeZone = z;
   ['nord','hauts','sud'].forEach(function(x) {
@@ -787,9 +692,6 @@ function priceFor(item, zone) {
   return zone === 'hauts' ? item.h : zone === 'sud' ? item.s : item.n;
 }
 
-/* ════════════════════════════════════════════
-   BCR SEARCH — Helpers
-════════════════════════════════════════════ */
 function highlight(text, q) {
   if (!q) return text;
   var re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
@@ -825,10 +727,8 @@ function renderBCRItems(containerId, query, zone, filter, addable) {
       || item.u.toLowerCase().indexOf(q) >= 0;
     return matchCorp && matchQ;
   });
-
   var countEl = document.getElementById(containerId === 'bcr-panel-results' ? 'bcr-panel-count' : 'bcr-page-count');
   if (countEl) countEl.textContent = filtered.length + ' / ' + BCR.length;
-
   if (!filtered.length) {
     c.innerHTML = '<div class="bcr-empty"><div class="bcr-empty-icon">🔍</div><p>Aucun article trouvé</p></div>';
     return;
@@ -861,9 +761,6 @@ function renderBCRItems(containerId, query, zone, filter, addable) {
   });
 }
 
-/* ════════════════════════════════════════════
-   BCR PANEL (inside new-project)
-════════════════════════════════════════════ */
 function initBCRPanel() {
   bcrFilter = 'all';
   buildFilters('bcr-panel-filters', bcrFilter, function(v) { bcrFilter = v; }, renderBCRPanel);
@@ -875,15 +772,12 @@ function renderBCRPanel() {
   renderBCRItems('bcr-panel-results', q ? q.value : '', activeZone, bcrFilter, true);
 }
 function insertBCRItem(item, zone) {
-  if (!selectedChap) { notify('⚠ Sélectionnez un chapitre d\'abord'); return; }
+  if (!selectedChap) { notify("⚠ Sélectionnez un chapitre d'abord"); return; }
   var price = priceFor(item, zone || activeZone);
   addRow(selectedChap, item.nom, item.u, price, 1);
   notify('✓ "' + item.id + '" ajouté · ' + fmtN(price) + ' DA/' + item.u);
 }
 
-/* ════════════════════════════════════════════
-   BCR PAGE
-════════════════════════════════════════════ */
 function initBCRPage() {
   bcrPageFilter = 'all';
   buildFilters('bcr-page-filters', bcrPageFilter, function(v) { bcrPageFilter = v; renderBCRPage(); }, renderBCRPage);
@@ -894,15 +788,12 @@ function renderBCRPage() {
   var q = document.getElementById('bcr-page-search');
   var c = document.getElementById('bcr-page-results');
   if (!c) return;
-  c.style.display              = 'grid';
-  c.style.gridTemplateColumns  = 'repeat(auto-fill,minmax(300px,1fr))';
-  c.style.gap                  = '8px';
+  c.style.display             = 'grid';
+  c.style.gridTemplateColumns = 'repeat(auto-fill,minmax(300px,1fr))';
+  c.style.gap                 = '8px';
   renderBCRItems('bcr-page-results', q ? q.value : '', activeZonePage, bcrPageFilter, false);
 }
 
-/* ════════════════════════════════════════════
-   BCR BROWSE (catalogue)
-════════════════════════════════════════════ */
 var browseCorp = 'VRD';
 function initBCRBrowse() {
   var tabsEl = document.getElementById('bcr-browse-tabs');
@@ -954,9 +845,6 @@ function renderBrowse() {
   c.innerHTML = html;
 }
 
-/* ════════════════════════════════════════════
-   DQE CHAPITRES ENGINE
-════════════════════════════════════════════ */
 function addChap(name) {
   chapCounter++;
   var cid = 'c' + chapCounter;
@@ -1017,7 +905,6 @@ function deleteChap(cid) {
 function collapseAll() { document.querySelectorAll('.chap-body').forEach(function(b) { b.classList.add('collapsed'); }); document.querySelectorAll('.chap-toggle').forEach(function(t) { t.classList.remove('open'); }); }
 function expandAll()   { document.querySelectorAll('.chap-body').forEach(function(b) { b.classList.remove('collapsed'); }); document.querySelectorAll('.chap-toggle').forEach(function(t) { t.classList.add('open'); }); }
 
-/* ── Rows ── */
 function addRow(cid, desig, unite, prix, qty) {
   if (!rowCounters[cid]) rowCounters[cid] = 0;
   rowCounters[cid]++;
@@ -1083,9 +970,6 @@ function recalcAll() {
   document.getElementById('t-ttc').textContent     = fmtN(grandHT + tvaV) + ' DA';
 }
 
-/* ════════════════════════════════════════════
-   SAVE / COLLECT
-════════════════════════════════════════════ */
 function collectData() {
   var chaps = [], grandHT = 0;
   document.querySelectorAll('.chap-block').forEach(function(b) {
@@ -1110,8 +994,6 @@ function collectData() {
   });
   var tva  = parseInt(document.getElementById('p-tva').value) || 0;
   var tvaV = grandHT * tva / 100;
-  /* NOTE: id is intentionally omitted here — saveProject() assigns the correct
-     id depending on whether we are creating (Date.now()) or editing (original id). */
   return {
     nom:      document.getElementById('p-nom').value    || 'Projet sans titre',
     mo:       document.getElementById('p-mo').value,
@@ -1133,40 +1015,26 @@ function collectData() {
   };
 }
 
-/* ── saveProject ── */
 async function saveProject() {
   var d = collectData();
   if (!d.nom || d.nom === 'Projet sans titre') { notify('⚠ Saisissez un nom de projet'); return; }
-
   var isEdit = (editingIndex >= 0 && editingIndex < projects.length);
-
-  /* FIX: preserve the original project id when editing.
-     collectData() no longer generates an id so:
-     - edit  → reuse projects[editingIndex].id  (ensures UPDATE not INSERT)
-     - create → generate a fresh Date.now() id                              */
   if (isEdit) {
     d.id = projects[editingIndex].id;
   } else {
     d.id = Date.now();
   }
-
   if (isCloudMode()) {
     notify('☁ Sauvegarde cloud...');
     try {
       var ok;
       if (isEdit && d.id) {
-        /* PUT /projects/:id → UPDATE on the worker (new endpoint) */
         ok = await supaUpdateProject(String(d.id), d);
       } else {
-        /* POST /projects → INSERT */
         ok = await supaInsertProject(d);
       }
       if (ok) {
-        if (isEdit) {
-          projects[editingIndex] = d;
-        } else {
-          projects.unshift(d);
-        }
+        if (isEdit) { projects[editingIndex] = d; } else { projects.unshift(d); }
         document.getElementById('nb-projects').textContent = projects.length;
         notify('✓ Sauvegardé dans le cloud !');
         addAct('☁ Cloud saved', '"' + d.nom + '"', 'g');
@@ -1178,17 +1046,11 @@ async function saveProject() {
       notify('⚠ Erreur réseau — vérifiez votre connexion');
     }
   } else {
-    /* Mode local */
-    if (isEdit) {
-      projects[editingIndex] = d;
-    } else {
-      projects.unshift(d);
-    }
+    if (isEdit) { projects[editingIndex] = d; } else { projects.unshift(d); }
     localStorage.setItem('bq_v3', JSON.stringify(projects));
     document.getElementById('nb-projects').textContent = projects.length;
     notify('✓ Sauvegardé localement');
   }
-
   editingIndex = -1;
   setTimeout(function() { nav('projects', null); }, 700);
 }
@@ -1211,11 +1073,7 @@ function resetForm() {
   addChap('Chapitre I — Travaux Préparatoires');
 }
 
-/* ════════════════════════════════════════════
-   DASHBOARD — corrigé : utilise projects[] déjà chargé
-════════════════════════════════════════════ */
 function renderDash() {
-  /* Mode local : re-lire le localStorage */
   if (!isCloudMode()) {
     projects = JSON.parse(localStorage.getItem('bq_v3') || '[]');
   }
@@ -1287,81 +1145,50 @@ function _doRenderProjects() {
   c.innerHTML = h + '</tbody></table></div>';
 }
 
-/* ── delProj — corrigé : utilise supaDeleteProject() ── */
 function delProj(i) {
   if (confirm('Supprimer ?')) {
     var p = projects[i];
     projects.splice(i, 1);
-
     if (isCloudMode() && p && p.id) {
       supaDeleteProject(String(p.id)).catch(function(e) { console.warn('Cloud delete error:', e); });
     } else {
       localStorage.setItem('bq_v3', JSON.stringify(projects));
     }
-
     document.getElementById('nb-projects').textContent = projects.length;
     renderProjects();
     notify('Projet supprimé');
   }
 }
 
-/* ── cleanDuplicates ── */
 async function cleanDuplicates() {
   if (!confirm('Supprimer tous les doublons ? (garde le plus récent de chaque projet)')) return;
   notify('🧹 Nettoyage en cours...');
-
-  /* The list comes ordered by updated_at DESC (most recent first).
-     So the FIRST time we see a given key we keep it; subsequent ones are duplicates.
-     Key = nom + total HT so only true duplicates are caught. */
-  var seen     = {};
-  var unique   = [];
-  var toDelete = [];   /* ids of duplicate rows to DELETE from D1 */
-
+  var seen = {}, unique = [], toDelete = [];
   projects.forEach(function(p) {
     var key = (p.nom || '').trim().toLowerCase() + '|' + (p.ht || 0);
-    if (!seen[key]) {
-      seen[key] = true;
-      unique.push(p);
-    } else {
-      /* This is a duplicate — collect its id for physical deletion */
-      if (p.id) toDelete.push(String(p.id));
-    }
+    if (!seen[key]) { seen[key] = true; unique.push(p); }
+    else { if (p.id) toDelete.push(String(p.id)); }
   });
-
   var removed = toDelete.length;
   projects = unique;
-
   if (isCloudMode()) {
-    /* FIX: physically DELETE each duplicate row from D1.
-       The unique rows already exist — no re-insert needed. */
     var failed = 0;
     for (var i = 0; i < toDelete.length; i++) {
       var ok = await supaDeleteProject(toDelete[i]);
       if (!ok) failed++;
     }
-    if (failed > 0) {
-      notify('⚠ ' + failed + ' suppression(s) échouée(s) — rechargez et réessayez');
-      renderProjects();
-      return;
-    }
+    if (failed > 0) { notify('⚠ ' + failed + ' suppression(s) échouée(s)'); renderProjects(); return; }
   } else {
     localStorage.setItem('bq_v3', JSON.stringify(projects));
   }
-
   document.getElementById('nb-projects').textContent = projects.length;
   renderProjects();
-  if (removed === 0) {
-    notify('✓ Aucun doublon détecté');
-  } else {
-    notify('✓ ' + removed + ' doublon(s) supprimé(s) — ' + projects.length + ' projets conservés');
-  }
+  notify(removed === 0 ? '✓ Aucun doublon détecté' : '✓ ' + removed + ' doublon(s) supprimé(s)');
 }
 
 function editProject(idx) {
   var p = projects[idx];
   if (!p) return;
-  /* FIX: call resetForm() FIRST (it sets editingIndex = -1),
-     then set editingIndex AFTER so it is not clobbered. */
   resetForm();
   editingIndex = idx;
   nav('new-project', null);
@@ -1399,7 +1226,7 @@ function editProject(idx) {
 }
 
 /* ════════════════════════════════════════════
-   PDF BTPH
+   PDF BTPH — CORRIGÉ (colonnes non tronquées)
 ════════════════════════════════════════════ */
 function generatePDF() { saveProject(); setTimeout(function() { genPDF(0); }, 400); }
 
@@ -1410,21 +1237,21 @@ function genPDF(idx) {
   var now   = new Date().toLocaleDateString('fr-DZ');
   var chaps = p.chapitres || [];
 
-  /* ── Styles réutilisés ──
-     PAGE utilise min-height pour garantir qu'une page courte remplit quand même l'A4.
-     BREAK utilise les deux syntaxes CSS (ancienne + moderne) pour compatibilité maximale.
-  ── */
+  /* ── Largeur fixe A4 en pixels à 96dpi : 794px
+     On utilise une largeur de rendu de 1123px (A4 à 150% pour éviter le crop)
+     et on laisse html2pdf scaler vers A4. ── */
+  var PW = 760; // largeur utile en px (marges incluses)
+
   var C = {
-    PAGE : 'width:690px;margin:0 auto;font-family:Arial,sans-serif;font-size:9pt;color:#111;' +
-           'background:#fff;padding:20px 20px 14px;box-sizing:border-box;min-height:1050px;',
+    PAGE : 'width:' + PW + 'px;margin:0 auto;font-family:Arial,sans-serif;font-size:9pt;color:#111;background:#fff;padding:18px 20px 14px;box-sizing:border-box;overflow:hidden;',
     BREAK: 'page-break-after:always;break-after:page;',
     hdr: function() {
-      return '<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #c8a800;margin-bottom:14px;padding-bottom:8px;"><tr>' +
-        '<td style="vertical-align:middle;"><table cellpadding="0" cellspacing="4"><tr>' +
+      return '<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #c8a800;margin-bottom:14px;padding-bottom:8px;table-layout:fixed;"><tr>' +
+        '<td style="vertical-align:middle;width:60%;"><table cellpadding="0" cellspacing="4"><tr>' +
           '<td style="width:34px;height:34px;background:#f5d800;border-radius:6px;text-align:center;font-weight:900;font-size:13px;color:#0d1117;vertical-align:middle;">BQ</td>' +
           '<td style="padding-left:8px;"><div style="font-size:12pt;font-weight:900;color:#111;">BuildQuant</div><div style="font-size:7pt;color:#888;">Plateforme de Métré BTP — Algérie | BCR 2024</div></td>' +
         '</tr></table></td>' +
-        '<td style="text-align:right;font-size:8pt;color:#666;vertical-align:middle;">Réf : <b>' + (p.ref || '—') + '</b><br/>Date : <b>' + (p.date || now) + '</b></td>' +
+        '<td style="text-align:right;font-size:8pt;color:#666;vertical-align:middle;width:40%;">Réf : <b>' + (p.ref || '—') + '</b><br/>Date : <b>' + (p.date || now) + '</b></td>' +
       '</tr></table>';
     },
     sec: function(t) {
@@ -1433,13 +1260,13 @@ function genPDF(idx) {
       '</tr></table>';
     },
     pgF: function(n) {
-      return '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:auto;padding-top:12px;border-top:1px solid #e0e0e0;"><tr>' +
+      return '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;padding-top:8px;border-top:1px solid #e0e0e0;"><tr>' +
         '<td style="font-size:7pt;color:#aaa;">BuildQuant · DQE BTPH · ' + (p.nom || 'Projet') + '</td>' +
         '<td style="text-align:right;font-size:7pt;color:#aaa;">Page ' + n + '</td>' +
       '</tr></table>';
     },
     sig: function(t, sg) {
-      return '<td width="33%" style="padding:4px;vertical-align:top;">' +
+      return '<td style="padding:4px;vertical-align:top;width:33%;">' +
         '<table width="100%" cellpadding="6" cellspacing="0" style="border:1px solid #ddd;border-radius:4px;font-size:8pt;">' +
           '<tr><td style="font-size:7pt;color:#888;text-transform:uppercase;border-bottom:1px solid #eee;font-weight:700;">' + t + '</td></tr>' +
           '<tr><td style="font-size:9pt;font-weight:600;color:#111;">' + (sg && sg.nom ? sg.nom : '&nbsp;') + '</td></tr>' +
@@ -1448,35 +1275,35 @@ function genPDF(idx) {
         '</table>' +
       '</td>';
     },
-    TH : 'background:#0d1117;color:#f5d800;padding:6px 8px;font-size:7.5pt;font-weight:700;border:1px solid #0d1117;',
-    TD : 'padding:5px 8px;border:1px solid #e0e0e0;font-size:8.5pt;color:#222;',
-    TDR: 'padding:5px 8px;border:1px solid #e0e0e0;font-size:8.5pt;color:#222;text-align:right;',
-    TDB: 'padding:5px 8px;border:1px solid #e0e0e0;font-size:8.5pt;font-weight:700;color:#c8a800;text-align:right;',
+    TH : 'background:#0d1117;color:#f5d800;padding:6px 6px;font-size:7pt;font-weight:700;border:1px solid #0d1117;',
+    TD : 'padding:5px 6px;border:1px solid #e0e0e0;font-size:8pt;color:#222;',
+    TDR: 'padding:5px 6px;border:1px solid #e0e0e0;font-size:8pt;color:#222;text-align:right;',
+    TDB: 'padding:5px 6px;border:1px solid #e0e0e0;font-size:8pt;font-weight:700;color:#c8a800;text-align:right;',
   };
 
   /* ── Page de garde ── */
   var cover =
     '<div style="' + C.PAGE + C.BREAK + '">' +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="border:3px solid #c8a800;border-radius:6px;padding:28px;"><tr><td>' +
-      '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:30px;"><tr>' +
-        '<td><table cellpadding="0" cellspacing="6"><tr>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border:3px solid #c8a800;border-radius:6px;padding:24px;table-layout:fixed;"><tr><td>' +
+      '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr>' +
+        '<td width="60%"><table cellpadding="0" cellspacing="6"><tr>' +
           '<td style="width:48px;height:48px;background:#f5d800;border-radius:10px;text-align:center;font-weight:900;font-size:19px;color:#0d1117;vertical-align:middle;">BQ</td>' +
           '<td style="padding-left:10px;"><div style="font-size:18pt;font-weight:900;color:#111;">BuildQuant</div><div style="font-size:8pt;color:#888;text-transform:uppercase;letter-spacing:1px;">Plateforme de Métré BTP</div></td>' +
         '</tr></table></td>' +
-        '<td style="text-align:right;font-size:8.5pt;color:#555;vertical-align:top;">Réf : <b>' + (p.ref || '—') + '</b><br/>' + now + '</td>' +
+        '<td style="text-align:right;font-size:8.5pt;color:#555;vertical-align:top;width:40%;">Réf : <b>' + (p.ref || '—') + '</b><br/>' + now + '</td>' +
       '</tr></table>' +
-      '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;"><tr><td style="text-align:center;">' +
+      '<div style="text-align:center;margin-bottom:20px;">' +
         '<div style="font-size:8.5pt;color:#888;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;">République Algérienne Démocratique et Populaire</div>' +
         '<div style="font-size:8.5pt;color:#777;margin-bottom:18px;">' + (p.mo || "Maître d'Ouvrage") + '</div>' +
-        '<table width="60%" cellpadding="12" cellspacing="0" align="center" style="border:2.5px solid #c8a800;border-radius:6px;"><tr><td style="text-align:center;">' +
+        '<div style="display:inline-block;border:2.5px solid #c8a800;border-radius:6px;padding:14px 24px;text-align:center;">' +
           '<div style="font-size:9pt;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Devis Quantitatif et Estimatif</div>' +
           '<div style="font-size:17pt;font-weight:900;color:#111;line-height:1.2;">' + (p.nom || 'Projet') + '</div>' +
           (p.objet ? '<div style="font-size:8pt;color:#555;margin-top:6px;font-style:italic;">' + p.objet + '</div>' : '') +
-        '</td></tr></table>' +
-      '</td></tr></table>' +
-      '<table width="70%" cellpadding="6" cellspacing="0" align="center" style="border:1px solid #ddd;border-radius:4px;margin-bottom:20px;">' +
+        '</div>' +
+      '</div>' +
+      '<table width="70%" cellpadding="6" cellspacing="0" align="center" style="border:1px solid #ddd;border-radius:4px;margin-bottom:20px;table-layout:fixed;">' +
         [['Wilaya', p.wilaya||'—'],['Chapitres', chaps.length+' chapitres'],["Maître d'ouvrage", p.mo||'—'],["Bureau d'études", p.be||'—'],['Réf. dossier', p.ref||'—'],['Date', p.date||now]].map(function(r) {
-          return '<tr><td width="40%" style="background:#f5f5f5;font-size:8pt;font-weight:600;color:#555;border-bottom:1px solid #eee;border-right:1px solid #eee;">' + r[0] + '</td><td style="font-size:8.5pt;border-bottom:1px solid #eee;">' + r[1] + '</td></tr>';
+          return '<tr><td style="background:#f5f5f5;font-size:8pt;font-weight:600;color:#555;border-bottom:1px solid #eee;border-right:1px solid #eee;width:40%;">' + r[0] + '</td><td style="font-size:8.5pt;border-bottom:1px solid #eee;">' + r[1] + '</td></tr>';
         }).join('') +
       '</table>' +
       '<table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eee;padding-top:12px;"><tr>' +
@@ -1488,12 +1315,12 @@ function genPDF(idx) {
   /* ── Table des matières ── */
   var toc =
     '<div style="' + C.PAGE + C.BREAK + '">' + C.hdr() + C.sec('Table des Matières — Sommaire DQE') +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:16px;">' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:16px;table-layout:fixed;">' +
       '<thead><tr>' +
-        '<th width="6%" style="' + C.TH + 'text-align:center;">N°</th>' +
+        '<th style="' + C.TH + 'text-align:center;width:6%;">N°</th>' +
         '<th style="' + C.TH + 'text-align:left;">Chapitre</th>' +
-        '<th width="12%" style="' + C.TH + 'text-align:center;">Articles</th>' +
-        '<th width="22%" style="' + C.TH + 'text-align:right;">Sous-total HT</th>' +
+        '<th style="' + C.TH + 'text-align:center;width:12%;">Articles</th>' +
+        '<th style="' + C.TH + 'text-align:right;width:22%;">Sous-total HT</th>' +
       '</tr></thead><tbody>' +
       chaps.map(function(ch, i) {
         return '<tr style="background:' + (i%2===0 ? '#fff' : '#fafafa') + '">' +
@@ -1506,17 +1333,17 @@ function genPDF(idx) {
       '<tr style="background:#fffbea;"><td colspan="3" style="' + C.TD + 'font-weight:700;text-align:right;">TOTAL GÉNÉRAL HT</td>' +
       '<td style="' + C.TDB + 'font-size:10pt;">' + fmtN(p.ht || 0) + ' DA</td></tr>' +
     '</tbody></table>' +
-    '<table width="100%" cellpadding="0" cellspacing="8" style="margin-top:4px;"><tr>' +
-      '<td width="50%" style="vertical-align:top;">' +
-        '<table width="100%" cellpadding="8" cellspacing="0" style="background:#f9f9f9;border:1px solid #ddd;border-radius:4px;font-size:9pt;">' +
+    '<table width="100%" cellpadding="0" cellspacing="8" style="margin-top:4px;table-layout:fixed;"><tr>' +
+      '<td style="vertical-align:top;width:50%;">' +
+        '<table width="100%" cellpadding="8" cellspacing="0" style="background:#f9f9f9;border:1px solid #ddd;border-radius:4px;font-size:9pt;table-layout:fixed;">' +
           '<tr><td colspan="2" style="font-size:7pt;color:#888;text-transform:uppercase;font-weight:700;border-bottom:1px solid #eee;padding-bottom:6px;">Récapitulatif financier</td></tr>' +
           '<tr><td style="color:#555;padding:4px 0;">Montant HT</td><td style="text-align:right;font-weight:600;">' + fmtN(p.ht||0) + ' DA</td></tr>' +
           '<tr><td style="color:#555;padding:4px 0;">TVA (' + p.tva + '%)</td><td style="text-align:right;">' + fmtN(p.tvaVal||0) + ' DA</td></tr>' +
           '<tr style="border-top:2px solid #c8a800;"><td style="font-weight:700;padding-top:6px;">MONTANT TTC</td><td style="text-align:right;font-weight:700;color:#c8a800;font-size:11pt;">' + fmtN(p.ttc||0) + ' DA</td></tr>' +
         '</table>' +
       '</td>' +
-      '<td width="50%" style="vertical-align:top;padding-left:8px;">' +
-        '<table width="100%" cellpadding="8" cellspacing="0" style="background:#f9f9f9;border:1px solid #ddd;border-radius:4px;font-size:8.5pt;">' +
+      '<td style="vertical-align:top;padding-left:8px;width:50%;">' +
+        '<table width="100%" cellpadding="8" cellspacing="0" style="background:#f9f9f9;border:1px solid #ddd;border-radius:4px;font-size:8.5pt;table-layout:fixed;">' +
           '<tr><td colspan="2" style="font-size:7pt;color:#888;text-transform:uppercase;font-weight:700;border-bottom:1px solid #eee;padding-bottom:6px;">Informations projet</td></tr>' +
           "<tr><td style='color:#555;padding:3px 0;'>Maître d'ouvrage</td><td style='text-align:right;'>" + (p.mo||'—') + '</td></tr>' +
           '<tr><td style="color:#555;padding:3px 0;">Wilaya</td><td style="text-align:right;">' + (p.wilaya||'—') + '</td></tr>' +
@@ -1526,34 +1353,27 @@ function genPDF(idx) {
     '</tr></table>' +
     C.pgF(2) + '</div>';
 
-  /* ── Pages des chapitres — avec découpe automatique toutes les ROWS lignes ──
-     Chaque chapitre long est découpé en sous-pages de ROWS lignes max.
-     Chaque sous-page est un div autonome avec son propre break-after.
-     Le numéro de ligne continue sur les pages suivantes d'un même chapitre.
-  ── */
-  var ROWS   = 30;
+  /* ── Pages des chapitres ── */
+  var ROWS = 28;
   var pageNum = 3;
   var chapPages = chaps.map(function(ch) {
     var allRows   = ch.rows || [];
     var numChunks = Math.max(1, Math.ceil(allRows.length / ROWS));
     var pages     = '';
-
     for (var pi = 0; pi < numChunks; pi++) {
-      var chunk    = allRows.slice(pi * ROWS, (pi + 1) * ROWS);
-      var isLast   = pi === numChunks - 1;
-      var offset   = pi * ROWS;
-      var suffix   = numChunks > 1
-        ? ' <span style="font-size:7pt;font-weight:400;color:#bbb;">(p.' + (pi+1) + '/' + numChunks + ')</span>'
-        : '';
+      var chunk  = allRows.slice(pi * ROWS, (pi + 1) * ROWS);
+      var isLast = pi === numChunks - 1;
+      var offset = pi * ROWS;
+      var suffix = numChunks > 1 ? ' (p.' + (pi+1) + '/' + numChunks + ')' : '';
 
       var rowsHtml = chunk.map(function(r, ri) {
         return '<tr style="background:' + (ri%2===0 ? '#fff' : '#fafafa') + '">' +
-          '<td style="' + C.TD + 'text-align:center;width:28px;">' + (offset+ri+1) + '</td>' +
-          '<td style="' + C.TD + '">' + (r.desig || '') + '</td>' +
-          '<td style="' + C.TD + 'text-align:center;width:40px;">' + (r.unite || '') + '</td>' +
-          '<td style="' + C.TDR + 'width:55px;">' + (r.qty || 0) + '</td>' +
-          '<td style="' + C.TDR + 'width:90px;">' + fmtN(r.pu) + ' DA</td>' +
-          '<td style="' + C.TDB + 'width:100px;">' + fmtN(r.montant) + ' DA</td>' +
+          '<td style="' + C.TD + 'text-align:center;width:4%;">' + (offset+ri+1) + '</td>' +
+          '<td style="' + C.TD + 'word-wrap:break-word;">' + (r.desig || '') + '</td>' +
+          '<td style="' + C.TD + 'text-align:center;width:6%;">' + (r.unite || '') + '</td>' +
+          '<td style="' + C.TDR + 'width:8%;">' + (r.qty || 0) + '</td>' +
+          '<td style="' + C.TDR + 'width:13%;">' + fmtN(r.pu) + ' DA</td>' +
+          '<td style="' + C.TDB + 'width:15%;">' + fmtN(r.montant) + ' DA</td>' +
         '</tr>';
       }).join('');
 
@@ -1567,14 +1387,14 @@ function genPDF(idx) {
       pages += '<div style="' + C.PAGE + C.BREAK + '">' +
         C.hdr() +
         C.sec('Chap. ' + ch.num + ' — ' + ch.name + suffix) +
-        '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:10px;">' +
+        '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:8.5pt;margin-bottom:10px;table-layout:fixed;">' +
           '<thead><tr>' +
-            '<th width="4%" style="' + C.TH + 'text-align:center;">N°</th>' +
+            '<th style="' + C.TH + 'text-align:center;width:4%;">N°</th>' +
             '<th style="' + C.TH + 'text-align:left;">Désignation des Travaux</th>' +
-            '<th width="6%" style="' + C.TH + 'text-align:center;">Unité</th>' +
-            '<th width="8%" style="' + C.TH + 'text-align:center;">Qté</th>' +
-            '<th width="13%" style="' + C.TH + 'text-align:right;">P.U. (DA)</th>' +
-            '<th width="14%" style="' + C.TH + 'text-align:right;">Montant HT</th>' +
+            '<th style="' + C.TH + 'text-align:center;width:6%;">Unité</th>' +
+            '<th style="' + C.TH + 'text-align:center;width:8%;">Qté</th>' +
+            '<th style="' + C.TH + 'text-align:right;width:13%;">P.U. (DA)</th>' +
+            '<th style="' + C.TH + 'text-align:right;width:15%;">Montant HT</th>' +
           '</tr></thead>' +
           '<tbody>' +
             (rowsHtml || '<tr><td colspan="6" style="' + C.TD + 'text-align:center;color:#aaa;">Aucun article</td></tr>') +
@@ -1590,12 +1410,12 @@ function genPDF(idx) {
   /* ── Récapitulatif général ── */
   var recap =
     '<div style="' + C.PAGE + '">' + C.hdr() + C.sec('Récapitulatif Général DQE') +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:16px;">' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:16px;table-layout:fixed;">' +
       '<thead><tr>' +
-        '<th width="7%" style="' + C.TH + 'text-align:center;">Chap.</th>' +
+        '<th style="' + C.TH + 'text-align:center;width:7%;">Chap.</th>' +
         '<th style="' + C.TH + 'text-align:left;">Désignation</th>' +
-        '<th width="9%" style="' + C.TH + 'text-align:center;">Art.</th>' +
-        '<th width="20%" style="' + C.TH + 'text-align:right;">Montant HT</th>' +
+        '<th style="' + C.TH + 'text-align:center;width:9%;">Art.</th>' +
+        '<th style="' + C.TH + 'text-align:right;width:20%;">Montant HT</th>' +
       '</tr></thead>' +
       '<tbody>' +
       chaps.map(function(ch, i) {
@@ -1615,33 +1435,31 @@ function genPDF(idx) {
       '</tfoot>' +
     '</table>' +
     C.sec('Signatures et Visas Officiels') +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;table-layout:fixed;"><tr>' +
       C.sig('Établi par', p.sig1) + C.sig('Vérifié par', p.sig2) + C.sig('Approuvé par', p.sig3) +
     '</tr></table>' +
     C.pgF(pageNum) + '</div>';
 
-  /* ── Rendu PDF ──
-     On passe une CHAÎNE HTML à html2pdf().from(string).
-     En mode string, html2pdf crée lui-même un div temporaire qu'il appende
-     au body à top:0;left:0 (visible, dans le viewport) → html2canvas capture
-     correctement. Il supprime ce div automatiquement après export.
-     NE PAS passer un élément DOM positionné hors viewport (left:-9999px) :
-     html2canvas ne peut pas le capturer et le PDF sort vide.
-  ── */
+  /* ══════════════════════════════════════════
+     RENDU PDF — htmlContent en string
+     windowWidth large (1123) + scale:2
+     pour capturer tout le contenu sans crop
+  ══════════════════════════════════════════ */
   var htmlContent =
-    '<div style="width:794px;background:#fff;font-family:Arial,sans-serif;overflow:visible;">' +
+    '<div style="width:' + PW + 'px;background:#fff;font-family:Arial,sans-serif;overflow:hidden;">' +
       cover + toc + chapPages + recap +
     '</div>';
 
   var opt = {
-    margin:      [5, 5, 5, 5],
+    margin:      [8, 8, 8, 8],
     filename:    'BQ_DQE_' + (p.nom || 'DQE').replace(/\s+/g,'_').substring(0,40) + '.pdf',
     image:       { type: 'jpeg', quality: 0.98 },
     html2canvas: {
       scale:           2,
       useCORS:         true,
       backgroundColor: '#ffffff',
-      windowWidth:     794,
+      windowWidth:     PW + 40,
+      windowHeight:    1200,
       scrollX:         0,
       scrollY:         0,
       logging:         false,
@@ -1756,9 +1574,6 @@ async function genXLSX(idx) {
   addAct('Excel exporté', '"' + (p.nom||'Projet') + '"', 'g');
 }
 
-/* ════════════════════════════════════════════
-   XLSX BUILDER — Office Open XML natif
-════════════════════════════════════════════ */
 function buildStyleSheet() {
   return '<?xml version="1.0" encoding="UTF-8"?>' +
   '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
@@ -1803,19 +1618,16 @@ function buildXLSX(sheets, strings, stylesXml) {
     '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' + strings.length + '" uniqueCount="' + strings.length + '">';
   strings.forEach(function(s) { ssXml += '<si><t xml:space="preserve">' + escXml(s) + '</t></si>'; });
   ssXml += '</sst>';
-
   var wbXml = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>';
   sheets.forEach(function(sh, i) { wbXml += '<sheet name="' + escXml(sh.name) + '" sheetId="' + (i+1) + '" r:id="rId' + (i+1) + '"/>'; });
   wbXml += '</sheets></workbook>';
-
   var wbRels = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
     '<Relationship Id="rId0" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>' +
     '<Relationship Id="rId999" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
   sheets.forEach(function(sh, i) { wbRels += '<Relationship Id="rId' + (i+1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i+1) + '.xml"/>'; });
   wbRels += '</Relationships>';
-
   var ctXml = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -1825,12 +1637,10 @@ function buildXLSX(sheets, strings, stylesXml) {
     '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>';
   sheets.forEach(function(sh, i) { ctXml += '<Override PartName="/xl/worksheets/sheet' + (i+1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'; });
   ctXml += '</Types>';
-
   var rootRels = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
     '</Relationships>';
-
   var parts = {};
   parts['[Content_Types].xml']        = ctXml;
   parts['_rels/.rels']                = rootRels;
@@ -1838,7 +1648,6 @@ function buildXLSX(sheets, strings, stylesXml) {
   parts['xl/_rels/workbook.xml.rels'] = wbRels;
   parts['xl/styles.xml']              = stylesXml;
   parts['xl/sharedStrings.xml']       = ssXml;
-
   sheets.forEach(function(sh, si) {
     var xml = '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
     if (sh.cols && sh.cols.length) {
@@ -1897,9 +1706,6 @@ function zipFromParts(parts) {
   return new Blob([new Uint8Array(entries)], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 
-/* ════════════════════════════════════════════
-   EXCEL IMPORT
-════════════════════════════════════════════ */
 function handleExcelImport(e) {
   if (!selectedChap) { notify("⚠ Sélectionnez un chapitre d'abord"); e.target.value = ''; return; }
   var file = e.target.files[0];
@@ -1927,9 +1733,6 @@ function handleExcelImport(e) {
   reader.readAsBinaryString(file);
 }
 
-/* ════════════════════════════════════════════
-   UTILS
-════════════════════════════════════════════ */
 function fmtN(n) { return Math.round(n).toLocaleString('fr-DZ'); }
 var ntimer;
 function notify(msg) {
@@ -1947,7 +1750,6 @@ function addAct(t, s, c) {
   d.innerHTML = '<div class="act-dot ' + (c||'y') + '"></div><div><div class="act-title">' + t + '</div><div class="act-sub">' + s + '</div></div><div class="act-time">' + now + '</div>';
   l.insertBefore(d, l.firstChild);
 }
-
 function setBN(activeId) {
   document.querySelectorAll('.bn-item').forEach(function(b) { b.classList.remove('active'); });
   if (!activeId) return;
@@ -1955,9 +1757,6 @@ function setBN(activeId) {
   if (el) el.classList.add('active');
 }
 
-/* ════════════════════════════════════════════
-   INIT
-════════════════════════════════════════════ */
 document.getElementById('p-date').value = new Date().toISOString().split('T')[0];
 window.addEventListener('load', function() {
   waitForSupabase(function() { checkSession(); });
