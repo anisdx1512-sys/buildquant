@@ -1226,39 +1226,40 @@ function editProject(idx) {
 }
 
 /* ════════════════════════════════════════════
-   PDF BTPH — CORRIGÉ A4 (colonnes non tronquées)
+   PDF BTPH — A4 FULL WIDTH FIX
 ════════════════════════════════════════════ */
 function generatePDF() { saveProject(); setTimeout(function() { genPDF(0); }, 400); }
 
 function genPDF(idx) {
   var p = projects[idx];
   if (!p) { notify('Erreur: projet introuvable'); return; }
-  notify('📄 Génération PDF BTPH...');
+  notify('📄 Génération PDF A4...');
   var now   = new Date().toLocaleDateString('fr-DZ');
   var chaps = p.chapitres || [];
 
-  /* ── A4 safe width : 700px rendu → ~732px A4 utile avec marge 8mm ── */
-  var PW = 700;
+  /* A4 width @ 96dpi = 794px. No internal padding — margins handled by jsPDF */
+  var PW = 794;
 
   var C = {
-    PAGE : 'width:' + PW + 'px;margin:0 auto;font-family:Arial,sans-serif;font-size:9pt;color:#111;background:#fff;padding:14px 12px 12px;box-sizing:border-box;overflow:hidden;',
+    /* page wrapper: exact A4 width, zero internal padding */
+    PAGE : 'width:' + PW + 'px;margin:0;padding:0;font-family:Arial,sans-serif;font-size:8.5pt;color:#111;background:#fff;box-sizing:border-box;overflow:hidden;',
     BREAK: 'page-break-after:always;break-after:page;',
     hdr: function() {
-      return '<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #c8a800;margin-bottom:12px;padding-bottom:6px;table-layout:fixed;"><tr>' +
-        '<td style="vertical-align:middle;width:60%;"><table cellpadding="0" cellspacing="4"><tr>' +
-          '<td style="width:30px;height:30px;background:#f5d800;border-radius:5px;text-align:center;font-weight:900;font-size:12px;color:#0d1117;vertical-align:middle;">BQ</td>' +
-          '<td style="padding-left:8px;"><div style="font-size:11pt;font-weight:900;color:#111;">BuildQuant</div><div style="font-size:7pt;color:#888;">Plateforme de Métré BTP — Algérie | BCR 2024</div></td>' +
+      return '<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #c8a800;margin-bottom:10px;padding-bottom:6px;table-layout:fixed;"><tr>' +
+        '<td style="vertical-align:middle;width:55%;"><table cellpadding="0" cellspacing="3"><tr>' +
+          '<td style="width:28px;height:28px;background:#f5d800;border-radius:5px;text-align:center;font-weight:900;font-size:11px;color:#0d1117;vertical-align:middle;">BQ</td>' +
+          '<td style="padding-left:6px;"><div style="font-size:11pt;font-weight:900;color:#111;">BuildQuant</div><div style="font-size:7pt;color:#888;">Plateforme de Métré BTP — Algérie | BCR 2024</div></td>' +
         '</tr></table></td>' +
-        '<td style="text-align:right;font-size:8pt;color:#666;vertical-align:middle;width:40%;">Réf : <b>' + (p.ref || '—') + '</b><br/>Date : <b>' + (p.date || now) + '</b></td>' +
+        '<td style="text-align:right;font-size:8pt;color:#666;vertical-align:middle;width:45%;">Réf : <b>' + (p.ref || '—') + '</b><br/>Date : <b>' + (p.date || now) + '</b></td>' +
       '</tr></table>';
     },
     sec: function(t) {
-      return '<table width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 6px;"><tr>' +
-        '<td style="background:#0d1117;color:#f5d800;padding:6px 10px;font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.8px;border-radius:3px;">' + t + '</td>' +
+      return '<table width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 6px;"><tr>' +
+        '<td style="background:#0d1117;color:#f5d800;padding:5px 10px;font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.8px;border-radius:3px;">' + t + '</td>' +
       '</tr></table>';
     },
     pgF: function(n) {
-      return '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;padding-top:6px;border-top:1px solid #e0e0e0;"><tr>' +
+      return '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;padding-top:6px;border-top:1px solid #e0e0e0;"><tr>' +
         '<td style="font-size:7pt;color:#aaa;">BuildQuant · DQE BTPH · ' + (p.nom || 'Projet') + '</td>' +
         '<td style="text-align:right;font-size:7pt;color:#aaa;">Page ' + n + '</td>' +
       '</tr></table>';
@@ -1269,58 +1270,55 @@ function genPDF(idx) {
           '<tr><td style="font-size:7pt;color:#888;text-transform:uppercase;border-bottom:1px solid #eee;font-weight:700;">' + t + '</td></tr>' +
           '<tr><td style="font-size:9pt;font-weight:600;color:#111;word-break:break-word;">' + (sg && sg.nom ? sg.nom : '&nbsp;') + '</td></tr>' +
           '<tr><td style="font-size:8pt;color:#555;word-break:break-word;">' + (sg && sg.titre ? sg.titre : '&nbsp;') + '</td></tr>' +
-          '<tr><td style="height:50px;border:1.5px dashed #ddd;text-align:center;color:#ccc;font-size:8pt;border-radius:3px;">Signature / Cachet</td></tr>' +
+          '<tr><td style="height:45px;border:1.5px dashed #ddd;text-align:center;color:#ccc;font-size:8pt;border-radius:3px;">Signature / Cachet</td></tr>' +
         '</table>' +
       '</td>';
     },
-    TH : 'background:#0d1117;color:#f5d800;padding:5px 5px;font-size:7pt;font-weight:700;border:1px solid #0d1117;word-break:break-word;',
-    TD : 'padding:4px 5px;border:1px solid #e0e0e0;font-size:8pt;color:#222;word-break:break-word;overflow-wrap:anywhere;',
-    TDR: 'padding:4px 5px;border:1px solid #e0e0e0;font-size:8pt;color:#222;text-align:right;word-break:break-word;overflow-wrap:anywhere;',
-    TDB: 'padding:4px 5px;border:1px solid #e0e0e0;font-size:8pt;font-weight:700;color:#c8a800;text-align:right;word-break:break-word;overflow-wrap:anywhere;',
+    TH : 'background:#0d1117;color:#f5d800;padding:5px 6px;font-size:7.5pt;font-weight:700;border:1px solid #0d1117;word-break:break-word;',
+    TD : 'padding:4px 6px;border:1px solid #e0e0e0;font-size:8pt;color:#222;word-break:break-word;overflow-wrap:anywhere;',
+    TDR: 'padding:4px 6px;border:1px solid #e0e0e0;font-size:8pt;color:#222;text-align:right;word-break:break-word;overflow-wrap:anywhere;',
+    TDB: 'padding:4px 6px;border:1px solid #e0e0e0;font-size:8pt;font-weight:700;color:#c8a800;text-align:right;word-break:break-word;overflow-wrap:anywhere;',
   };
-
-  /* ── CSS global injecté pour garantir box-sizing ── */
-  var globalCSS = '<style>*{box-sizing:border-box;margin:0;padding:0;} table{table-layout:fixed;border-collapse:collapse;} tr{page-break-inside:avoid !important;} td,th{word-break:break-word;overflow-wrap:anywhere;}</style>';
 
   /* ── Page de garde ── */
   var cover =
-    '<div style="' + C.PAGE + C.BREAK + '">' + globalCSS +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="border:3px solid #c8a800;border-radius:6px;padding:20px;table-layout:fixed;"><tr><td>' +
-      '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;"><tr>' +
-        '<td width="60%"><table cellpadding="0" cellspacing="6"><tr>' +
-          '<td style="width:42px;height:42px;background:#f5d800;border-radius:8px;text-align:center;font-weight:900;font-size:17px;color:#0d1117;vertical-align:middle;">BQ</td>' +
-          '<td style="padding-left:10px;"><div style="font-size:16pt;font-weight:900;color:#111;">BuildQuant</div><div style="font-size:8pt;color:#888;text-transform:uppercase;letter-spacing:1px;">Plateforme de Métré BTP</div></td>' +
+    '<div style="' + C.PAGE + C.BREAK + '">' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border:3px solid #c8a800;border-radius:6px;padding:18px;table-layout:fixed;"><tr><td>' +
+      '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;"><tr>' +
+        '<td width="60%"><table cellpadding="0" cellspacing="5"><tr>' +
+          '<td style="width:40px;height:40px;background:#f5d800;border-radius:8px;text-align:center;font-weight:900;font-size:16px;color:#0d1117;vertical-align:middle;">BQ</td>' +
+          '<td style="padding-left:8px;"><div style="font-size:15pt;font-weight:900;color:#111;">BuildQuant</div><div style="font-size:7.5pt;color:#888;text-transform:uppercase;letter-spacing:1px;">Plateforme de Métré BTP</div></td>' +
         '</tr></table></td>' +
         '<td style="text-align:right;font-size:8pt;color:#555;vertical-align:top;width:40%;">Réf : <b>' + (p.ref || '—') + '</b><br/>' + now + '</td>' +
       '</tr></table>' +
-      '<div style="text-align:center;margin-bottom:18px;">' +
-        '<div style="font-size:8pt;color:#888;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;">République Algérienne Démocratique et Populaire</div>' +
-        '<div style="font-size:8pt;color:#777;margin-bottom:16px;">' + (p.mo || "Maître d'Ouvrage") + '</div>' +
+      '<div style="text-align:center;margin-bottom:16px;">' +
+        '<div style="font-size:8pt;color:#888;text-transform:uppercase;letter-spacing:2px;margin-bottom:5px;">République Algérienne Démocratique et Populaire</div>' +
+        '<div style="font-size:8pt;color:#777;margin-bottom:14px;">' + (p.mo || "Maître d'Ouvrage") + '</div>' +
         '<div style="display:inline-block;border:2.5px solid #c8a800;border-radius:6px;padding:12px 20px;text-align:center;">' +
-          '<div style="font-size:9pt;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Devis Quantitatif et Estimatif</div>' +
+          '<div style="font-size:8.5pt;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Devis Quantitatif et Estimatif</div>' +
           '<div style="font-size:16pt;font-weight:900;color:#111;line-height:1.2;">' + (p.nom || 'Projet') + '</div>' +
-          (p.objet ? '<div style="font-size:8pt;color:#555;margin-top:6px;font-style:italic;">' + p.objet + '</div>' : '') +
+          (p.objet ? '<div style="font-size:8pt;color:#555;margin-top:5px;font-style:italic;">' + p.objet + '</div>' : '') +
         '</div>' +
       '</div>' +
-      '<table width="70%" cellpadding="5" cellspacing="0" align="center" style="border:1px solid #ddd;border-radius:4px;margin-bottom:18px;table-layout:fixed;">' +
+      '<table width="70%" cellpadding="5" cellspacing="0" align="center" style="border:1px solid #ddd;border-radius:4px;margin-bottom:16px;table-layout:fixed;">' +
         [['Wilaya', p.wilaya||'—'],['Chapitres', chaps.length+' chapitres'],["Maître d'ouvrage", p.mo||'—'],["Bureau d'études", p.be||'—'],['Réf. dossier', p.ref||'—'],['Date', p.date||now]].map(function(r) {
           return '<tr><td style="background:#f5f5f5;font-size:8pt;font-weight:600;color:#555;border-bottom:1px solid #eee;border-right:1px solid #eee;width:40%;">' + r[0] + '</td><td style="font-size:8pt;border-bottom:1px solid #eee;word-break:break-word;">' + r[1] + '</td></tr>';
         }).join('') +
       '</table>' +
-      '<table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eee;padding-top:10px;"><tr>' +
+      '<table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eee;padding-top:8px;"><tr>' +
         '<td style="font-size:8pt;color:#aaa;">Généré par BuildQuant · BCR MHUV Algérie 2024</td>' +
-        '<td style="text-align:right;"><span style="background:#0d1117;color:#f5d800;padding:4px 12px;border-radius:4px;font-size:9pt;font-weight:700;">CONFIDENTIEL</span></td>' +
+        '<td style="text-align:right;"><span style="background:#0d1117;color:#f5d800;padding:4px 12px;border-radius:4px;font-size:8.5pt;font-weight:700;">CONFIDENTIEL</span></td>' +
       '</tr></table>' +
     '</td></tr></table></div>';
 
   /* ── Table des matières ── */
   var toc =
-    '<div style="' + C.PAGE + C.BREAK + '">' + globalCSS + C.hdr() + C.sec('Table des Matières — Sommaire DQE') +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:14px;table-layout:fixed;">' +
+    '<div style="' + C.PAGE + C.BREAK + '">' + C.hdr() + C.sec('Table des Matières — Sommaire DQE') +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:8.5pt;margin-bottom:12px;table-layout:fixed;">' +
       '<thead><tr>' +
         '<th style="' + C.TH + 'text-align:center;width:8%;">N°</th>' +
         '<th style="' + C.TH + 'text-align:left;">Chapitre</th>' +
-        '<th style="' + C.TH + 'text-align:center;width:14%;">Articles</th>' +
+        '<th style="' + C.TH + 'text-align:center;width:12%;">Articles</th>' +
         '<th style="' + C.TH + 'text-align:right;width:24%;">Sous-total HT</th>' +
       '</tr></thead><tbody>' +
       chaps.map(function(ch, i) {
@@ -1332,19 +1330,19 @@ function genPDF(idx) {
         '</tr>';
       }).join('') +
       '<tr style="background:#fffbea;"><td colspan="3" style="' + C.TD + 'font-weight:700;text-align:right;">TOTAL GÉNÉRAL HT</td>' +
-      '<td style="' + C.TDB + 'font-size:10pt;">' + fmtN(p.ht || 0) + ' DA</td></tr>' +
+      '<td style="' + C.TDB + 'font-size:9.5pt;">' + fmtN(p.ht || 0) + ' DA</td></tr>' +
     '</tbody></table>' +
     '<table width="100%" cellpadding="0" cellspacing="6" style="margin-top:4px;table-layout:fixed;"><tr>' +
       '<td style="vertical-align:top;width:50%;">' +
-        '<table width="100%" cellpadding="6" cellspacing="0" style="background:#f9f9f9;border:1px solid #ddd;border-radius:4px;font-size:9pt;table-layout:fixed;">' +
+        '<table width="100%" cellpadding="6" cellspacing="0" style="background:#f9f9f9;border:1px solid #ddd;border-radius:4px;font-size:8.5pt;table-layout:fixed;">' +
           '<tr><td colspan="2" style="font-size:7pt;color:#888;text-transform:uppercase;font-weight:700;border-bottom:1px solid #eee;padding-bottom:5px;">Récapitulatif financier</td></tr>' +
           '<tr><td style="color:#555;padding:3px 0;">Montant HT</td><td style="text-align:right;font-weight:600;">' + fmtN(p.ht||0) + ' DA</td></tr>' +
           '<tr><td style="color:#555;padding:3px 0;">TVA (' + p.tva + '%)</td><td style="text-align:right;">' + fmtN(p.tvaVal||0) + ' DA</td></tr>' +
-          '<tr style="border-top:2px solid #c8a800;"><td style="font-weight:700;padding-top:5px;">MONTANT TTC</td><td style="text-align:right;font-weight:700;color:#c8a800;font-size:11pt;">' + fmtN(p.ttc||0) + ' DA</td></tr>' +
+          '<tr style="border-top:2px solid #c8a800;"><td style="font-weight:700;padding-top:5px;">MONTANT TTC</td><td style="text-align:right;font-weight:700;color:#c8a800;font-size:10.5pt;">' + fmtN(p.ttc||0) + ' DA</td></tr>' +
         '</table>' +
       '</td>' +
       '<td style="vertical-align:top;padding-left:6px;width:50%;">' +
-        '<table width="100%" cellpadding="6" cellspacing="0" style="background:#f9f9f9;border:1px solid #ddd;border-radius:4px;font-size:8.5pt;table-layout:fixed;">' +
+        '<table width="100%" cellpadding="6" cellspacing="0" style="background:#f9f9f9;border:1px solid #ddd;border-radius:4px;font-size:8pt;table-layout:fixed;">' +
           '<tr><td colspan="2" style="font-size:7pt;color:#888;text-transform:uppercase;font-weight:700;border-bottom:1px solid #eee;padding-bottom:5px;">Informations projet</td></tr>' +
           "<tr><td style='color:#555;padding:3px 0;'>Maître d'ouvrage</td><td style='text-align:right;word-break:break-word;'>" + (p.mo||'—') + '</td></tr>' +
           '<tr><td style="color:#555;padding:3px 0;">Wilaya</td><td style="text-align:right;word-break:break-word;">' + (p.wilaya||'—') + '</td></tr>' +
@@ -1370,11 +1368,11 @@ function genPDF(idx) {
       var rowsHtml = chunk.map(function(r, ri) {
         return '<tr style="background:' + (ri%2===0 ? '#fff' : '#fafafa') + '">' +
           '<td style="' + C.TD + 'text-align:center;width:5%;">' + (offset+ri+1) + '</td>' +
-          '<td style="' + C.TD + '">' + (r.desig || '') + '</td>' +
-          '<td style="' + C.TD + 'text-align:center;width:7%;">' + (r.unite || '') + '</td>' +
-          '<td style="' + C.TDR + 'width:9%;">' + (r.qty || 0) + '</td>' +
-          '<td style="' + C.TDR + 'width:14%;">' + fmtN(r.pu) + ' DA</td>' +
-          '<td style="' + C.TDB + 'width:16%;">' + fmtN(r.montant) + ' DA</td>' +
+          '<td style="' + C.TD + 'width:38%;">' + (r.desig || '') + '</td>' +
+          '<td style="' + C.TD + 'text-align:center;width:8%;">' + (r.unite || '') + '</td>' +
+          '<td style="' + C.TDR + 'width:10%;">' + (r.qty || 0) + '</td>' +
+          '<td style="' + C.TDR + 'width:15%;">' + fmtN(r.pu) + ' DA</td>' +
+          '<td style="' + C.TDB + 'width:24%;">' + fmtN(r.montant) + ' DA</td>' +
         '</tr>';
       }).join('');
 
@@ -1385,17 +1383,17 @@ function genPDF(idx) {
           '</tr></tfoot>'
         : '<tfoot><tr><td colspan="6" style="' + C.TD + 'font-size:7.5pt;color:#aaa;text-align:center;font-style:italic;">Suite page suivante…</td></tr></tfoot>';
 
-      pages += '<div style="' + C.PAGE + C.BREAK + '">' + globalCSS +
+      pages += '<div style="' + C.PAGE + C.BREAK + '">' +
         C.hdr() +
         C.sec('Chap. ' + ch.num + ' — ' + ch.name + suffix) +
-        '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:8.5pt;margin-bottom:8px;table-layout:fixed;">' +
+        '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:8pt;margin-bottom:8px;table-layout:fixed;">' +
           '<thead><tr>' +
             '<th style="' + C.TH + 'text-align:center;width:5%;">N°</th>' +
-            '<th style="' + C.TH + 'text-align:left;">Désignation des Travaux</th>' +
-            '<th style="' + C.TH + 'text-align:center;width:7%;">Unité</th>' +
-            '<th style="' + C.TH + 'text-align:center;width:9%;">Qté</th>' +
-            '<th style="' + C.TH + 'text-align:right;width:14%;">P.U. (DA)</th>' +
-            '<th style="' + C.TH + 'text-align:right;width:16%;">Montant HT</th>' +
+            '<th style="' + C.TH + 'text-align:left;width:38%;">Désignation des Travaux</th>' +
+            '<th style="' + C.TH + 'text-align:center;width:8%;">Unité</th>' +
+            '<th style="' + C.TH + 'text-align:center;width:10%;">Qté</th>' +
+            '<th style="' + C.TH + 'text-align:right;width:15%;">P.U. (DA)</th>' +
+            '<th style="' + C.TH + 'text-align:right;width:24%;">Montant HT</th>' +
           '</tr></thead>' +
           '<tbody>' +
             (rowsHtml || '<tr><td colspan="6" style="' + C.TD + 'text-align:center;color:#aaa;">Aucun article</td></tr>') +
@@ -1410,13 +1408,13 @@ function genPDF(idx) {
 
   /* ── Récapitulatif général ── */
   var recap =
-    '<div style="' + C.PAGE + '">' + globalCSS + C.hdr() + C.sec('Récapitulatif Général DQE') +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:9pt;margin-bottom:14px;table-layout:fixed;">' +
+    '<div style="' + C.PAGE + '">' + C.hdr() + C.sec('Récapitulatif Général DQE') +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:8.5pt;margin-bottom:12px;table-layout:fixed;">' +
       '<thead><tr>' +
         '<th style="' + C.TH + 'text-align:center;width:8%;">Chap.</th>' +
-        '<th style="' + C.TH + 'text-align:left;">Désignation</th>' +
-        '<th style="' + C.TH + 'text-align:center;width:10%;">Art.</th>' +
-        '<th style="' + C.TH + 'text-align:right;width:22%;">Montant HT</th>' +
+        '<th style="' + C.TH + 'text-align:left;width:50%;">Désignation</th>' +
+        '<th style="' + C.TH + 'text-align:center;width:12%;">Art.</th>' +
+        '<th style="' + C.TH + 'text-align:right;width:30%;">Montant HT</th>' +
       '</tr></thead>' +
       '<tbody>' +
       chaps.map(function(ch, i) {
@@ -1431,8 +1429,8 @@ function genPDF(idx) {
       '<tfoot>' +
         '<tr style="background:#f5f5f5;"><td colspan="3" style="' + C.TD + 'font-weight:700;text-align:right;">TOTAL HT</td><td style="' + C.TDB + '">' + fmtN(p.ht||0) + ' DA</td></tr>' +
         '<tr><td colspan="3" style="' + C.TD + 'text-align:right;color:#555;">TVA (' + p.tva + '%)</td><td style="' + C.TDR + '">' + fmtN(p.tvaVal||0) + ' DA</td></tr>' +
-        '<tr><td colspan="3" style="padding:8px 6px;font-weight:900;font-size:11pt;background:#0d1117;color:#f5d800;text-align:right;border:1px solid #0d1117;">MONTANT TOTAL TTC</td>' +
-             '<td style="padding:8px 6px;font-weight:900;font-size:11pt;background:#0d1117;color:#f5d800;text-align:right;border:1px solid #0d1117;">' + fmtN(p.ttc||0) + ' DA</td></tr>' +
+        '<tr><td colspan="3" style="padding:8px 6px;font-weight:900;font-size:10.5pt;background:#0d1117;color:#f5d800;text-align:right;border:1px solid #0d1117;">MONTANT TOTAL TTC</td>' +
+             '<td style="padding:8px 6px;font-weight:900;font-size:10.5pt;background:#0d1117;color:#f5d800;text-align:right;border:1px solid #0d1117;">' + fmtN(p.ttc||0) + ' DA</td></tr>' +
       '</tfoot>' +
     '</table>' +
     C.sec('Signatures et Visas Officiels') +
@@ -1442,7 +1440,7 @@ function genPDF(idx) {
     C.pgF(pageNum) + '</div>';
 
   /* ══════════════════════════════════════════
-     RENDU PDF — htmlContent en string
+     RENDU PDF — A4 full width
   ══════════════════════════════════════════ */
   var htmlContent =
     '<div style="width:' + PW + 'px;background:#fff;font-family:Arial,sans-serif;overflow:hidden;">' +
@@ -1450,15 +1448,14 @@ function genPDF(idx) {
     '</div>';
 
   var opt = {
-    margin:      [8, 8, 8, 8],
+    margin:      [8, 8, 8, 8],          /* 8mm margins on all sides */
     filename:    'BQ_DQE_' + (p.nom || 'DQE').replace(/\s+/g,'_').substring(0,40) + '.pdf',
     image:       { type: 'jpeg', quality: 0.98 },
     html2canvas: {
-      scale:           2,
+      scale:           2,                /* high-res */
       useCORS:         true,
       backgroundColor: '#ffffff',
-      windowWidth:     PW,        // ← CORRIGÉ : égal à la largeur du contenu
-      windowHeight:    1200,
+      /* REMOVED windowWidth — let html2canvas use the element's natural width (794px) */
       scrollX:         0,
       scrollY:         0,
       logging:         false,
@@ -1468,8 +1465,8 @@ function genPDF(idx) {
     pagebreak:   { mode: ['css', 'legacy'] }
   };
 
-  html2pdf().set(opt).from(htmlContent).save().then(function() {
-    notify('✓ PDF BTPH exporté !');
+  html2pdf().set(opt).set(opt).from(htmlContent).save().then(function() {
+    notify('✓ PDF A4 exporté !');
     addAct('PDF exporté', '"' + (p.nom || 'Projet') + '"', 'y');
   }).catch(function(e) {
     console.error('PDF error:', e);
